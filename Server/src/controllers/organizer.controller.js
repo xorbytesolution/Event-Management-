@@ -46,7 +46,10 @@ export const listOrganizerEvents = asyncHandler(async (req, res) => {
   }
 
   const subFilter = {
-    $or: submissionConditions.length > 0 ? submissionConditions : [{ organizerEmail: "__none__" }],
+    $or:
+      submissionConditions.length > 0
+        ? submissionConditions
+        : [{ organizerEmail: "__none__" }],
   };
 
   if (status && status !== "all") {
@@ -63,12 +66,19 @@ export const listOrganizerEvents = asyncHandler(async (req, res) => {
     subFilter.status = { $in: ["pending", "under_review", "rejected"] };
   }
 
-  const shouldFetchEvents = !status || status === "all" || status === "approved";
-  const shouldFetchSubmissions = !status || status === "all" || status === "pending" || status === "rejected";
+  const shouldFetchEvents =
+    !status || status === "all" || status === "approved";
+  const shouldFetchSubmissions =
+    !status ||
+    status === "all" ||
+    status === "pending" ||
+    status === "rejected";
 
   const [events, submissions] = await Promise.all([
     shouldFetchEvents
-      ? Event.find(eventFilter).sort({ createdAt: -1 }).select("-deletedBy -deletedAt")
+      ? Event.find(eventFilter)
+          .sort({ createdAt: -1 })
+          .select("-deletedBy -deletedAt")
       : Promise.resolve([]),
     shouldFetchSubmissions
       ? EventSubmission.find(subFilter).sort({ createdAt: -1 })
@@ -147,10 +157,7 @@ export const getOrganizerEvent = asyncHandler(async (req, res) => {
 
   // 1. Try finding in Event collection
   const event = await Event.findOne({
-    $or: [
-      ...(isObjectId ? [{ _id: eventId }] : []),
-      { publicId: eventId },
-    ],
+    $or: [...(isObjectId ? [{ _id: eventId }] : []), { publicId: eventId }],
     deletedAt: null,
   }).select("-deletedBy -deletedAt");
 
@@ -159,7 +166,10 @@ export const getOrganizerEvent = asyncHandler(async (req, res) => {
       !event.organizerId ||
       event.organizerId.toString() !== req.user._id.toString()
     ) {
-      throw new ApiError(403, "You are not authorized to view or access this event");
+      throw new ApiError(
+        403,
+        "You are not authorized to view or access this event",
+      );
     }
     return res.json({ event });
   }
@@ -180,9 +190,10 @@ export const getOrganizerEvent = asyncHandler(async (req, res) => {
         ...(userPhone ? [{ organizerPhone: userPhone }] : []),
       ],
     });
-    submission = userSubmissions.find(
-      (s) => s._id.toString().slice(-6).toLowerCase() === suffix,
-    ) || null;
+    submission =
+      userSubmissions.find(
+        (s) => s._id.toString().slice(-6).toLowerCase() === suffix,
+      ) || null;
   }
 
   if (submission) {
@@ -191,14 +202,18 @@ export const getOrganizerEvent = asyncHandler(async (req, res) => {
       (userPhone && submission.organizerPhone === userPhone);
 
     if (!isOwner) {
-      throw new ApiError(403, "You are not authorized to view this event submission");
+      throw new ApiError(
+        403,
+        "You are not authorized to view this event submission",
+      );
     }
 
     const formattedSubmission = {
       ...submission.toObject(),
       publicId: `SUB-${submission._id.toString().slice(-6).toUpperCase()}`,
       address: submission.venue,
-      approvalStatus: submission.status === "under_review" ? "pending" : submission.status,
+      approvalStatus:
+        submission.status === "under_review" ? "pending" : submission.status,
       rawStatus: submission.status,
       isSubmission: true,
     };
@@ -325,8 +340,9 @@ export const updateOrganizerProfile = asyncHandler(async (req, res) => {
  * Route: PUT /api/organizer/change-password
  */
 export const changeOrganizerPassword = asyncHandler(async (req, res) => {
-  const { currentPassword, newPassword } =
-    changeOrganizerPasswordSchema.parse(req.body);
+  const { currentPassword, newPassword } = changeOrganizerPasswordSchema.parse(
+    req.body,
+  );
   const organizerId = req.user._id;
 
   const user = await User.findOne({
@@ -366,4 +382,3 @@ export const changeOrganizerPassword = asyncHandler(async (req, res) => {
       "Password changed successfully. Please keep your new password safe.",
   });
 });
-
