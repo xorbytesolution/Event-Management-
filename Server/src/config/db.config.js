@@ -13,9 +13,18 @@ const connectDB = async () => {
     return cachedConnection;
   }
 
-  const uri = process.env.MONGODB_URI;
+  let uri = process.env.MONGODB_URI;
   if (!uri) {
     const errorMsg = "MONGODB_URI environment variable is missing in Vercel settings.";
+    console.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+
+  // Strip accidental quotes or leading/trailing whitespace
+  uri = uri.trim().replace(/^["']|["']$/g, "").trim();
+
+  if (!uri.startsWith("mongodb://") && !uri.startsWith("mongodb+srv://")) {
+    const errorMsg = `Invalid MONGODB_URI scheme. Connection string must start with 'mongodb://' or 'mongodb+srv://', but got: "${uri.substring(0, 15)}..."`;
     console.error(errorMsg);
     throw new Error(errorMsg);
   }
@@ -28,6 +37,7 @@ const connectDB = async () => {
       throw new Error(errorMsg);
     }
   }
+
 
   try {
     cachedConnection = mongoose.connect(uri, {
