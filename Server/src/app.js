@@ -56,6 +56,5 @@ app.use("/api/organizer", organizerRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
-app.get("/", (req, res) => res.json({ status: "ok" }));
 
 export default app;
