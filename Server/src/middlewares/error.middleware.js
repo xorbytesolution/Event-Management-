@@ -80,10 +80,8 @@ export const errorHandler = (error, req, res, next) => {
   // Unknown/server error
   // -------------------------
   return res.status(500).json({
-    message:
-      process.env.NODE_ENV === "production"
-        ? "Something went wrong on the server. Please try again later."
-        : error.message || "Something went wrong on the server. Please try again later.",
+    message: error.message || "Something went wrong on the server. Please try again later.",
     stack: process.env.NODE_ENV === "production" ? undefined : error.stack,
   });
 };
+

@@ -11,7 +11,13 @@ import connectDB from "./config/db.config.js";
 dotenv.config();
 
 // Connect to MongoDB
-await connectDB();
+if (!process.env.VERCEL) {
+  try {
+    await connectDB();
+  } catch (error) {
+    console.error("Local database connection error:", error.message);
+  }
+}
 
 const PORT = process.env.PORT || 5000;
 
@@ -22,3 +28,4 @@ if (!process.env.VERCEL) {
 }
 
 export default app;
+

@@ -8,9 +8,24 @@ import adminRoutes from "./routes/admin.routes.js";
 import organizerRoutes from "./routes/organizer.routes.js";
 import { errorHandler, notFound } from "./middlewares/error.middleware.js";
 
+import connectDB from "./config/db.config.js";
+
 const app = express();
 
 app.use(express.json());
+
+// Ensure database connection is ready for API requests (serverless cold-start resilience)
+app.use(async (req, res, next) => {
+  if (req.path === "/" || req.path === "/api/health") {
+    return next();
+  }
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 const configuredOrigins = process.env.CLIENT_URL
   ? process.env.CLIENT_URL.split(",").map((origin) =>
