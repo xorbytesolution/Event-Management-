@@ -1,8 +1,15 @@
+import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import Event from "../models/Event.model.js";
 import EventSubmission from "../models/EventSubmission.model.js";
+import Inquiry from "../models/Inquiry.model.js";
+import User from "../models/User.model.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import {
+  updateOrganizerProfileSchema,
+  changeOrganizerPasswordSchema,
+} from "../validations/organizerProfile.validation.js";
 
 const escapeRegex = (string = "") =>
   string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -201,3 +208,162 @@ export const getOrganizerEvent = asyncHandler(async (req, res) => {
 
   throw new ApiError(404, "Event not found");
 });
+
+/**
+ * Get authenticated organizer's profile and related event statistics.
+ * Route: GET /api/organizer/profile
+ */
+export const getOrganizerProfile = asyncHandler(async (req, res) => {
+  const organizerId = req.user._id;
+
+  const organizer = await User.findOne({
+    _id: organizerId,
+    roles: "organizer",
+    deletedAt: null,
+  }).select("-password -__v");
+
+  if (!organizer) {
+    throw new ApiError(404, "Organizer profile not found");
+  }
+
+  const [publishedEventsCount, pendingSubmissionsCount, totalInquiries] =
+    await Promise.all([
+      Event.countDocuments({ organizerId, deletedAt: null }),
+      EventSubmission.countDocuments({
+        $or: [
+          { organizerEmail: organizer.email },
+          ...(organizer.phone ? [{ organizerPhone: organizer.phone }] : []),
+        ],
+        status: { $in: ["pending", "under_review"] },
+      }),
+      Inquiry.countDocuments({ organizerId, deletedAt: null }),
+    ]);
+
+  res.json({
+    organizer,
+    stats: {
+      totalEvents: publishedEventsCount + pendingSubmissionsCount,
+      publishedEvents: publishedEventsCount,
+      draftEvents: pendingSubmissionsCount,
+      totalInquiries,
+    },
+  });
+});
+
+/**
+ * Update authenticated organizer's basic profile details (name, phone, avatar).
+ * Route: PUT /api/organizer/profile
+ */
+export const updateOrganizerProfile = asyncHandler(async (req, res) => {
+  const validatedData = updateOrganizerProfileSchema.parse(req.body);
+  const organizerId = req.user._id;
+
+  const user = await User.findOne({
+    _id: organizerId,
+    roles: "organizer",
+    deletedAt: null,
+  });
+
+  if (!user) {
+    throw new ApiError(404, "Organizer profile not found");
+  }
+
+  // Check if phone number is taken by another account
+  if (validatedData.phone !== user.phone) {
+    const existingPhoneUser = await User.findOne({
+      phone: validatedData.phone,
+      _id: { $ne: organizerId },
+      deletedAt: null,
+    });
+    if (existingPhoneUser) {
+      throw new ApiError(
+        409,
+        "Phone number is already registered with another account.",
+      );
+    }
+  }
+
+  const currentName = (user.name || "").trim();
+  const newName = (validatedData.name || "").trim();
+  const currentPhone = (user.phone || "").trim();
+  const newPhone = (validatedData.phone || "").trim();
+  const currentImg = user.profileImage || null;
+  const newImg = validatedData.profileImage
+    ? validatedData.profileImage.trim()
+    : null;
+
+  if (
+    currentName === newName &&
+    currentPhone === newPhone &&
+    currentImg === newImg
+  ) {
+    throw new ApiError(400, "No changes detected to update.");
+  }
+
+  user.name = newName;
+  user.phone = newPhone;
+  user.profileImage = newImg;
+  user.updatedBy = organizerId;
+
+  await user.save();
+
+  res.json({
+    message: "Profile updated successfully",
+    organizer: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      profileImage: user.profileImage,
+      roles: user.roles,
+    },
+  });
+});
+
+/**
+ * Change authenticated organizer's password.
+ * Route: PUT /api/organizer/change-password
+ */
+export const changeOrganizerPassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } =
+    changeOrganizerPasswordSchema.parse(req.body);
+  const organizerId = req.user._id;
+
+  const user = await User.findOne({
+    _id: organizerId,
+    roles: "organizer",
+    deletedAt: null,
+  });
+
+  if (!user) {
+    throw new ApiError(404, "Organizer account not found");
+  }
+
+  const isCurrentPasswordValid = await bcrypt.compare(
+    currentPassword,
+    user.password,
+  );
+
+  if (!isCurrentPasswordValid) {
+    throw new ApiError(400, "Current password is incorrect");
+  }
+
+  const isSamePassword = await bcrypt.compare(newPassword, user.password);
+  if (isSamePassword) {
+    throw new ApiError(
+      400,
+      "New password must be different from current password",
+    );
+  }
+
+  user.password = await bcrypt.hash(newPassword, 12);
+  user.updatedBy = organizerId;
+
+  await user.save();
+
+  res.json({
+    message:
+      "Password changed successfully. Please keep your new password safe.",
+  });
+});
+
