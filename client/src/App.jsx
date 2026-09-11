@@ -23,6 +23,8 @@ import AdminEvents from "./pages/admin/AdminEvents.jsx";
 import AdminEventDetails from "./pages/admin/AdminEventDetails.jsx";
 import AdminExhibitors from "./pages/admin/AdminExhibitors.jsx";
 import AdminExhibitorDetails from "./pages/admin/AdminExhibitorDetails.jsx";
+import AdminUsers from "./pages/admin/AdminUsers.jsx";
+import AdminUserDetails from "./pages/admin/AdminUserDetails.jsx";
 import AdminProfile from "./pages/admin/AdminProfile.jsx";
 import AdminRoute from "./routes/AdminRoute.jsx";
 import OrganizerRoute from "./routes/OrganizerRoute.jsx";
@@ -36,15 +38,14 @@ function App() {
 
           <Routes>
             <Route path="/" element={<Home />} />
-
             <Route path="/create-event" element={<CreateEvent />} />
-
             <Route path="/events/:cityName" element={<CityEventsPage />} />
-
+            <Route path="/events/:city" element={<CityEventsPage />} />
             <Route
               path="/events/details/:eventId"
               element={<EventDetailsPage />}
             />
+            <Route path="/event/:id" element={<EventDetailsPage />} />
 
             <Route path="/login" element={<Login />} />
 
@@ -70,11 +71,15 @@ function App() {
 
                 <Route path="events/:eventId" element={<AdminEventDetails />} />
 
-                <Route path="exhibitors" element={<AdminExhibitors />} />
+                {/* Unified Users Management */}
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="users/:userId" element={<AdminUserDetails />} />
 
+                {/* Backward compatibility aliases */}
+                <Route path="exhibitors" element={<AdminUsers />} />
                 <Route
                   path="exhibitors/:exhibitorId"
-                  element={<AdminExhibitorDetails />}
+                  element={<AdminUserDetails />}
                 />
 
                 <Route path="profile" element={<AdminProfile />} />

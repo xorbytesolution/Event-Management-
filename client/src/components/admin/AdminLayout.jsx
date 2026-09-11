@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Home,
   ArrowUpRight,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 import { useAdminAuth } from "../../context/AdminAuthContext";
@@ -40,9 +41,9 @@ function AdminLayout() {
       icon: CalendarDays,
     },
     {
-      name: "Exhibitors",
-      path: "/admin/exhibitors",
-      icon: Store,
+      name: "Users",
+      path: "/admin/users",
+      icon: Users,
     },
     {
       name: "Admin Profile",

@@ -14,6 +14,8 @@ import {
   getAdminEvent,
   listAdminExhibitors,
   getAdminExhibitor,
+  listAdminUsers,
+  getAdminUser,
   getAdminProfile,
   updateAdminProfile,
   changeAdminPassword,
@@ -34,6 +36,11 @@ router.get("/event-submissions/:submissionId", getSubmission);
 router.get("/events", listAdminEvents);
 router.get("/events/:eventId", getAdminEvent);
 
+// Unified Users Management
+router.get("/users", listAdminUsers);
+router.get("/users/:userId", getAdminUser);
+
+// Backward-compatible Exhibitor routes
 router.get("/exhibitors", listAdminExhibitors);
 router.get("/exhibitors/:exhibitorId", getAdminExhibitor);
 

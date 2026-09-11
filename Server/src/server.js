@@ -1,6 +1,6 @@
 /**
  * Server Startup & Listener Entry Point
- * Initializes HTTP server, database connections, WebSockets, and handles process signals for graceful shutdown.
+ * Initializes HTTP server, database connections, and exports app for Vercel serverless.
  */
 import dotenv from "dotenv";
 
@@ -10,16 +10,15 @@ import connectDB from "./config/db.config.js";
 // Load environment variables
 dotenv.config();
 
-if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
-    throw new Error("MONGODB_URI and JWT_SECRET must be set in .env");
-}
-
 // Connect to MongoDB
 await connectDB();
 
-// Start Express server
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-});
+  });
+}
+
+export default app;

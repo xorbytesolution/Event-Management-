@@ -13,7 +13,9 @@ const app = express();
 app.use(express.json());
 
 const configuredOrigins = process.env.CLIENT_URL
-  ? process.env.CLIENT_URL.split(",").map((origin) => origin.trim().replace(/\/+$/, ""))
+  ? process.env.CLIENT_URL.split(",").map((origin) =>
+      origin.trim().replace(/\/+$/, ""),
+    )
   : [];
 
 const allowedOrigins = [
@@ -54,5 +56,6 @@ app.use("/api/organizer", organizerRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
+app.get("/", (req, res) => res.json({ status: "ok" }));
 
 export default app;

@@ -7,6 +7,7 @@ import EventSubmission from "../models/EventSubmission.model.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import ExhibitorProfile from "../models/ExhibitorProfile.model.js";
+import OrganizerProfile from "../models/OrganizerProfile.model.js";
 
 import {
   loginSchema,
@@ -671,3 +672,160 @@ export const changeAdminPassword = asyncHandler(async (req, res) => {
     message: "Password changed successfully",
   });
 });
+
+export const listAdminUsers = asyncHandler(async (req, res) => {
+  const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(
+    Math.max(Number.parseInt(req.query.limit, 10) || 10, 1),
+    50,
+  );
+
+  const search = req.query.search?.trim() || "";
+  const role = req.query.role?.trim() || "all";
+  const accountStatus = req.query.accountStatus?.trim() || "";
+  const verified = req.query.verified?.trim() || "";
+
+  // Validate account status filter
+  if (
+    accountStatus &&
+    !["active", "inactive", "suspended"].includes(accountStatus)
+  ) {
+    throw new ApiError(400, "Invalid account status filter");
+  }
+
+  // Validate verification filter
+  if (verified && !["true", "false"].includes(verified)) {
+    throw new ApiError(400, "Invalid verification filter");
+  }
+
+  // Base match: non-deleted platform users (exhibitors / organizers)
+  const userMatch = {
+    deletedAt: null,
+    $or: [{ roles: "exhibitor" }, { roles: "organizer" }],
+  };
+
+  // Role filters
+  if (role === "exhibitor") {
+    userMatch.roles = "exhibitor";
+  } else if (role === "organizer") {
+    userMatch.roles = "organizer";
+  } else if (role === "both") {
+    userMatch.roles = { $all: ["exhibitor", "organizer"] };
+  } else if (role === "exhibitor_only") {
+    userMatch.roles = ["exhibitor"];
+  } else if (role === "organizer_only") {
+    userMatch.roles = ["organizer"];
+  }
+
+  // Account status filter
+  if (accountStatus) {
+    userMatch.accountStatus = accountStatus;
+  }
+
+  // Verification filter
+  if (verified) {
+    userMatch.isVerified = verified === "true";
+  }
+
+  // Search filter (name, email, phone)
+  if (search) {
+    const searchRegex = new RegExp(escapeRegex(search), "i");
+    userMatch.$and = userMatch.$and || [];
+    userMatch.$and.push({
+      $or: [
+        { name: searchRegex },
+        { email: searchRegex },
+        { phone: searchRegex },
+      ],
+    });
+  }
+
+  const [
+    users,
+    total,
+    totalPlatformUsers,
+    exhibitorsCount,
+    organizersCount,
+    dualRoleCount,
+  ] = await Promise.all([
+    User.find(userMatch)
+      .select(
+        "name email phone gender roles isVerified accountStatus profileImage createdAt updatedAt",
+      )
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit),
+    User.countDocuments(userMatch),
+    User.countDocuments({
+      deletedAt: null,
+      $or: [{ roles: "exhibitor" }, { roles: "organizer" }],
+    }),
+    User.countDocuments({ deletedAt: null, roles: "exhibitor" }),
+    User.countDocuments({ deletedAt: null, roles: "organizer" }),
+    User.countDocuments({
+      deletedAt: null,
+      roles: { $all: ["exhibitor", "organizer"] },
+    }),
+  ]);
+
+  const totalPages = Math.ceil(total / limit);
+
+  res.json({
+    users,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+    },
+    aggregates: {
+      totalUsers: totalPlatformUsers,
+      totalExhibitors: exhibitorsCount,
+      totalOrganizers: organizersCount,
+      dualRoleUsers: dualRoleCount,
+    },
+  });
+});
+
+export const getAdminUser = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  const user = await User.findOne({
+    _id: userId,
+    deletedAt: null,
+  }).select("-password -__v");
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const isExhibitor = user.roles?.includes("exhibitor");
+  const isOrganizer = user.roles?.includes("organizer");
+
+  const [exhibitorProfile, organizerProfile, events, submissions] =
+    await Promise.all([
+      isExhibitor ? ExhibitorProfile.findOne({ userId }) : null,
+      isOrganizer ? OrganizerProfile.findOne({ userId }) : null,
+      isOrganizer
+        ? Event.find({ organizerId: userId }).sort({ createdAt: -1 })
+        : [],
+      isOrganizer
+        ? EventSubmission.find({
+            $or: [
+              { organizerEmail: user.email },
+              { organizerPhone: user.phone },
+              { submittedBy: user._id },
+            ],
+          }).sort({ createdAt: -1 })
+        : [],
+    ]);
+
+  res.json({
+    user,
+    exhibitorProfile,
+    organizerProfile,
+    events,
+    submissions,
+  });
+});
+
