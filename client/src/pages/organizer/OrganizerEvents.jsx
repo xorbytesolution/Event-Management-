@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Search,
   Filter,
@@ -8,7 +8,6 @@ import {
   Clock3,
   CheckCircle2,
   XCircle,
-  Loader2,
   AlertCircle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -18,18 +17,65 @@ function OrganizerEvents() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Search & Filter
+  const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
+  });
+
+  // Aggregates for summary cards
+  const [aggregates, setAggregates] = useState({
+    all: 0,
+    approved: 0,
+    pending: 0,
+    rejected: 0,
+  });
+
+  /*
+   * Debounce search input (400ms).
+   * Prevents excessive API requests while typing.
+   */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      setSearchTerm(searchInput.trim());
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  /*
+   * Fetch events with server-side pagination, search, and status filter.
+   */
   useEffect(() => {
     const fetchEvents = async () => {
       try {
         setLoading(true);
         setError("");
+
         const [{ data }] = await Promise.all([
-          api.get("/organizer/events"),
-          new Promise((resolve) => setTimeout(resolve, 800)),
+          api.get("/organizer/events", {
+            params: {
+              page,
+              limit: 10,
+              ...(searchTerm ? { search: searchTerm } : {}),
+              ...(statusFilter !== "All"
+                ? { status: statusFilter.toLowerCase() }
+                : {}),
+            },
+          }),
+          new Promise((resolve) => setTimeout(resolve, 400)),
         ]);
+
         const mapped = (data.events || []).map((e) => {
           const startDateStr = e.startDate
             ? new Date(e.startDate).toLocaleDateString("en-IN", {
@@ -56,7 +102,16 @@ function OrganizerEvents() {
             })(),
           };
         });
+
         setEvents(mapped);
+
+        if (data.pagination) {
+          setPagination(data.pagination);
+        }
+
+        if (data.aggregates) {
+          setAggregates(data.aggregates);
+        }
       } catch (err) {
         console.error("Failed to load organizer events:", err);
         setError(err.response?.data?.message || "Failed to load events");
@@ -66,28 +121,45 @@ function OrganizerEvents() {
     };
 
     fetchEvents();
-  }, []);
+  }, [page, searchTerm, statusFilter]);
 
-  const filteredEvents = useMemo(() => {
-    return events.filter((event) => {
-      const search = searchTerm.trim().toLowerCase();
-      const name = (event.name || "").toLowerCase();
-      const location = (event.location || "").toLowerCase();
-      const category = (event.category || "").toLowerCase();
+  const handleStatusFilterChange = (status) => {
+    setStatusFilter(status);
+    setPage(1);
+  };
 
-      const matchesSearch =
-        !search ||
-        name.includes(search) ||
-        location.includes(search) ||
-        category.includes(search);
+  /*
+   * Generate pagination buttons with smart ellipsis.
+   */
+  const getPageNumbers = () => {
+    const totalPages = pagination.totalPages;
 
-      const matchesStatus =
-        statusFilter === "All" ||
-        (event.status || "").toLowerCase() === statusFilter.toLowerCase();
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
 
-      return matchesSearch && matchesStatus;
-    });
-  }, [events, searchTerm, statusFilter]);
+    if (page <= 3) {
+      return [1, 2, 3, 4, "...", totalPages];
+    }
+
+    if (page >= totalPages - 2) {
+      return [
+        1,
+        "...",
+        totalPages - 3,
+        totalPages - 2,
+        totalPages - 1,
+        totalPages,
+      ];
+    }
+
+    return [1, "...", page - 1, page, page + 1, "...", totalPages];
+  };
+
+  const firstItem =
+    pagination.total === 0 ? 0 : (page - 1) * pagination.limit + 1;
+
+  const lastItem = Math.min(page * pagination.limit, pagination.total);
 
   const getStatusClasses = (status) => {
     if (status === "Approved") {
@@ -128,11 +200,11 @@ function OrganizerEvents() {
         </p>
       </div>
 
-      {/* Status Summary */}
+      {/* Status Summary Cards */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <button
           type="button"
-          onClick={() => setStatusFilter("All")}
+          onClick={() => handleStatusFilterChange("All")}
           className={`rounded-xl border bg-white p-4 text-left shadow-sm transition ${
             statusFilter === "All"
               ? "border-orange-300 ring-2 ring-orange-100"
@@ -147,14 +219,14 @@ function OrganizerEvents() {
             <div className="mt-2 h-7 w-12 animate-pulse rounded bg-slate-200" />
           ) : (
             <p className="mt-1 text-2xl font-extrabold text-slate-900">
-              {events.length}
+              {aggregates.all}
             </p>
           )}
         </button>
 
         <button
           type="button"
-          onClick={() => setStatusFilter("Approved")}
+          onClick={() => handleStatusFilterChange("Approved")}
           className={`rounded-xl border bg-white p-4 text-left shadow-sm transition ${
             statusFilter === "Approved"
               ? "border-green-300 ring-2 ring-green-100"
@@ -169,14 +241,14 @@ function OrganizerEvents() {
             <div className="mt-2 h-7 w-12 animate-pulse rounded bg-slate-200" />
           ) : (
             <p className="mt-1 text-2xl font-extrabold text-slate-900">
-              {events.filter((event) => event.status === "Approved").length}
+              {aggregates.approved}
             </p>
           )}
         </button>
 
         <button
           type="button"
-          onClick={() => setStatusFilter("Pending")}
+          onClick={() => handleStatusFilterChange("Pending")}
           className={`rounded-xl border bg-white p-4 text-left shadow-sm transition ${
             statusFilter === "Pending"
               ? "border-orange-300 ring-2 ring-orange-100"
@@ -191,14 +263,14 @@ function OrganizerEvents() {
             <div className="mt-2 h-7 w-12 animate-pulse rounded bg-slate-200" />
           ) : (
             <p className="mt-1 text-2xl font-extrabold text-slate-900">
-              {events.filter((event) => event.status === "Pending").length}
+              {aggregates.pending}
             </p>
           )}
         </button>
 
         <button
           type="button"
-          onClick={() => setStatusFilter("Rejected")}
+          onClick={() => handleStatusFilterChange("Rejected")}
           className={`rounded-xl border bg-white p-4 text-left shadow-sm transition ${
             statusFilter === "Rejected"
               ? "border-red-300 ring-2 ring-red-100"
@@ -213,7 +285,7 @@ function OrganizerEvents() {
             <div className="mt-2 h-7 w-12 animate-pulse rounded bg-slate-200" />
           ) : (
             <p className="mt-1 text-2xl font-extrabold text-slate-900">
-              {events.filter((event) => event.status === "Rejected").length}
+              {aggregates.rejected}
             </p>
           )}
         </button>
@@ -233,8 +305,8 @@ function OrganizerEvents() {
 
               <input
                 type="text"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
                 placeholder="Search events, cities or categories..."
                 className="w-full rounded-lg border border-slate-300 bg-slate-50 py-2.5 pl-10 pr-3 text-sm outline-none transition focus:border-orange-500 focus:bg-white"
               />
@@ -246,7 +318,7 @@ function OrganizerEvents() {
 
               <select
                 value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
+                onChange={(event) => handleStatusFilterChange(event.target.value)}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none focus:border-orange-500"
               >
                 <option value="All">All Status</option>
@@ -298,7 +370,7 @@ function OrganizerEvents() {
                 </thead>
 
                 <tbody className="divide-y divide-slate-100">
-                  {filteredEvents.map((event) => (
+                  {events.map((event) => (
                     <tr
                       key={event.id}
                       className="transition hover:bg-slate-50/70"
@@ -360,7 +432,7 @@ function OrganizerEvents() {
 
             {/* Mobile Cards */}
             <div className="divide-y divide-slate-100 md:hidden">
-              {filteredEvents.map((event) => (
+              {events.map((event) => (
                 <div key={event.id} className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
@@ -415,7 +487,7 @@ function OrganizerEvents() {
             </div>
 
             {/* Empty State */}
-            {filteredEvents.length === 0 && (
+            {events.length === 0 && (
               <div className="px-6 py-16 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
                   <CalendarDays size={22} />
@@ -428,6 +500,74 @@ function OrganizerEvents() {
                 <p className="mt-1 text-sm text-slate-500">
                   Try changing your search or status filter.
                 </p>
+              </div>
+            )}
+
+            {/* Pagination */}
+            {pagination.totalPages > 1 && (
+              <div className="flex flex-col gap-4 border-t border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-500">
+                  Showing{" "}
+                  <span className="font-semibold text-slate-700">
+                    {firstItem}
+                  </span>{" "}
+                  –{" "}
+                  <span className="font-semibold text-slate-700">
+                    {lastItem}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-semibold text-slate-700">
+                    {pagination.total}
+                  </span>
+                </p>
+
+                <div className="flex items-center gap-1">
+                  {/* Previous */}
+                  <button
+                    type="button"
+                    onClick={() => setPage((current) => current - 1)}
+                    disabled={page === 1 || loading}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+
+                  {/* Page Numbers */}
+                  {getPageNumbers().map((pageNumber, index) =>
+                    pageNumber === "..." ? (
+                      <span
+                        key={`ellipsis-${index}`}
+                        className="px-2 text-sm text-slate-400"
+                      >
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={pageNumber}
+                        type="button"
+                        onClick={() => setPage(pageNumber)}
+                        disabled={loading}
+                        className={`hidden h-9 min-w-9 rounded-lg px-2 text-sm font-semibold transition sm:block ${
+                          pageNumber === page
+                            ? "bg-orange-500 text-white"
+                            : "text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        {pageNumber}
+                      </button>
+                    ),
+                  )}
+
+                  {/* Next */}
+                  <button
+                    type="button"
+                    onClick={() => setPage((current) => current + 1)}
+                    disabled={page === pagination.totalPages || loading}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             )}
           </>
@@ -532,6 +672,17 @@ function OrganizerEventsTableSkeleton() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Pagination Skeleton */}
+      <div className="flex flex-col gap-4 border-t border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between animate-pulse">
+        <div className="h-4 w-32 rounded bg-slate-200" />
+        <div className="flex items-center gap-1">
+          <div className="h-9 w-20 rounded-lg border border-slate-200 bg-slate-50" />
+          <div className="hidden h-9 w-9 rounded-lg bg-orange-500/70 sm:block" />
+          <div className="hidden h-9 w-9 rounded-lg border border-slate-200 bg-slate-50 sm:block" />
+          <div className="h-9 w-16 rounded-lg border border-slate-200 bg-slate-50" />
+        </div>
       </div>
     </>
   );

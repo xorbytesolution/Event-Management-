@@ -6,6 +6,10 @@ import {
   updateOrganizerProfile,
   changeOrganizerPassword,
 } from "../controllers/organizer.controller.js";
+import {
+  getOrganizerInquiries,
+  updateInquiryStatus,
+} from "../controllers/inquiry.controller.js";
 import { requireAuth, allowRoles } from "../middlewares/auth.middleware.js";
 
 const router = Router();
@@ -22,5 +26,10 @@ router.put("/change-password", changeOrganizerPassword);
 router.get("/events", listOrganizerEvents);
 router.get("/events/:eventId", getOrganizerEvent);
 
+// Inquiries
+router.get("/inquiries", getOrganizerInquiries);
+router.patch("/inquiries/:id/status", updateInquiryStatus);
+
 export default router;
+
 

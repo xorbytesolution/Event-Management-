@@ -13,6 +13,12 @@ import api from "../../services/api";
 function OrganizerDashboard() {
   const { user } = useAuth();
   const [events, setEvents] = useState([]);
+  const [aggregates, setAggregates] = useState({
+    all: 0,
+    approved: 0,
+    pending: 0,
+    inquiries: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,10 +26,13 @@ function OrganizerDashboard() {
       try {
         setLoading(true);
         const [{ data }] = await Promise.all([
-          api.get("/organizer/events"),
-          new Promise((resolve) => setTimeout(resolve, 800)),
+          api.get("/organizer/events", { params: { limit: 5 } }),
+          new Promise((resolve) => setTimeout(resolve, 600)),
         ]);
         setEvents(data.events || []);
+        if (data.aggregates) {
+          setAggregates(data.aggregates);
+        }
       } catch (err) {
         console.error("Failed to load organizer dashboard events:", err);
       } finally {
@@ -38,40 +47,33 @@ function OrganizerDashboard() {
     return <OrganizerDashboardSkeleton user={user} />;
   }
 
-  const totalCount = events.length;
-  const approvedCount = events.filter(
-    (e) => (e.approvalStatus || "").toLowerCase() === "approved",
-  ).length;
-  const pendingCount = events.filter(
-    (e) => (e.approvalStatus || "").toLowerCase() === "pending",
-  ).length;
-
   const stats = [
     {
       title: "Total Events",
-      value: loading ? "..." : String(totalCount),
+      value: String(aggregates.all),
       icon: CalendarDays,
       description: "All submitted events",
     },
     {
       title: "Approved Events",
-      value: loading ? "..." : String(approvedCount),
+      value: String(aggregates.approved),
       icon: CheckCircle2,
       description: "Currently published",
     },
     {
       title: "Pending Events",
-      value: loading ? "..." : String(pendingCount),
+      value: String(aggregates.pending),
       icon: Clock3,
       description: "Awaiting verification",
     },
     {
       title: "New Inquiries",
-      value: "0",
+      value: String(aggregates.inquiries || 0),
       icon: MessageSquare,
       description: "From exhibitors",
     },
   ];
+
 
   const recentEvents = events.slice(0, 5).map((e) => ({
     id: e.publicId || e._id,

@@ -135,16 +135,61 @@ export const listOrganizerEvents = asyncHandler(async (req, res) => {
     });
   }
 
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 10));
+
+  // Compute status aggregates for top summary cards
+  const [approvedCount, pendingCount, rejectedCount, totalInquiries] =
+    await Promise.all([
+      Event.countDocuments({ organizerId, deletedAt: null }),
+      EventSubmission.countDocuments({
+        $or:
+          submissionConditions.length > 0
+            ? submissionConditions
+            : [{ organizerEmail: "__none__" }],
+        status: { $in: ["pending", "under_review"] },
+      }),
+      EventSubmission.countDocuments({
+        $or:
+          submissionConditions.length > 0
+            ? submissionConditions
+            : [{ organizerEmail: "__none__" }],
+        status: "rejected",
+      }),
+      Inquiry.countDocuments({ organizerId, deletedAt: null }),
+    ]);
+
+  const aggregates = {
+    all: approvedCount + pendingCount + rejectedCount,
+    approved: approvedCount,
+    pending: pendingCount,
+    rejected: rejectedCount,
+    inquiries: totalInquiries,
+  };
+
+
   // Sort descending by creation date
   allEvents.sort(
     (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0),
   );
 
+  const total = allEvents.length;
+  const totalPages = Math.ceil(total / limit);
+  const startIndex = (page - 1) * limit;
+  const paginatedEvents = allEvents.slice(startIndex, startIndex + limit);
+
   res.json({
-    events: allEvents,
-    total: allEvents.length,
+    events: paginatedEvents,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+    },
+    aggregates,
   });
 });
+
 
 /**
  * Get a specific event, verifying that it belongs to the authenticated organizer.

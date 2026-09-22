@@ -16,6 +16,7 @@ import OrganizerLayout from "./components/organizer/OrganizerLayout.jsx";
 import OrganizerDashboard from "./pages/organizer/OrganizerDashboard.jsx";
 import OrganizerEvents from "./pages/organizer/OrganizerEvents.jsx";
 import OrganizerEventDetails from "./pages/organizer/OrganizerEventDetails.jsx";
+import OrganizerInquiries from "./pages/organizer/OrganizerInquiries.jsx";
 import OrganizerProfile from "./pages/organizer/OrganizerProfile.jsx";
 import AdminLayout from "./components/admin/AdminLayout.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
@@ -95,6 +96,7 @@ function App() {
                   path="events/:eventId"
                   element={<OrganizerEventDetails />}
                 />
+                <Route path="inquiries" element={<OrganizerInquiries />} />
                 <Route path="profile" element={<OrganizerProfile />} />
               </Route>
             </Route>

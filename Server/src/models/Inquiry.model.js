@@ -17,12 +17,50 @@ const inquirySchema = new mongoose.Schema(
             ref: "User",
             required: true
         },
-        message: {
+        firstName: {
             type: String,
             required: true,
+            trim: true
+        },
+        lastName: {
+            type: String,
             trim: true,
+            default: ""
+        },
+        email: {
+            type: String,
+            required: true,
+            lowercase: true,
+            trim: true
+        },
+        phone: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        gender: {
+            type: String,
+            enum: ["male", "female", "other"],
+            required: true,
+            default: "male"
+        },
+        category: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        message: {
+            type: String,
+            trim: true,
+            default: "",
             maxlength: 2000
         },
+        status: {
+            type: String,
+            enum: ["new", "accepted", "rejected", "contacted", "closed"],
+            default: "new"
+        },
+
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",

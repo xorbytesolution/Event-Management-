@@ -5,10 +5,15 @@ import Navbar from "../components/layout/Navbar";
 import Footer from "../components/layout/Footer";
 import SocialBanner from "../components/layout/SocialBanner";
 import api from "../services/api";
+
 import { useAuth } from "../context/AuthContext.jsx";
 import { formatDateTime, formatScheduleRange } from "../utils/dateUtils.js";
+import ContactOrganizerModal from "../components/events/ContactOrganizerModal.jsx";
 
 function EventDetailsPage() {
+
+
+
   const { eventId } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
@@ -405,55 +410,13 @@ function EventDetailsPage() {
         </div>
       </main>
 
-      {/* Contact Modal Overlay */}
-      {showContactModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
-            <div className="flex justify-between items-center border-b border-gray-200 pb-3">
-              <h3 className="text-lg font-bold text-gray-800">
-                Contact Event Organizer
-              </h3>
-              <button
-                onClick={() => setShowContactModal(false)}
-                className="text-gray-400 hover:text-gray-600 text-xl font-bold"
-              >
-                ✕
-              </button>
-            </div>
-            <p className="text-xs text-gray-600">
-              Connect directly with the organizer for stall booking and
-              sponsorships:
-            </p>
-            <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl space-y-2 text-center">
-              <span className="text-xs font-semibold text-gray-500 block">
-                {event.organizerName
-                  ? `Organizer: ${event.organizerName}`
-                  : "Organizer Contact"}
-              </span>
-              {event.organizerPhone ? (
-                <a
-                  href={`tel:${event.organizerPhone}`}
-                  className="text-xl font-extrabold text-orange-600 hover:underline block"
-                >
-                  +91 {event.organizerPhone}
-                </a>
-              ) : (
-                <span className="text-sm font-bold text-gray-700">
-                  Contact details unavailable
-                </span>
-              )}
-            </div>
-            <div className="pt-2 text-right">
-              <button
-                onClick={() => setShowContactModal(false)}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2 rounded-lg text-xs"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Contact Organizer Modal */}
+      <ContactOrganizerModal
+        isOpen={showContactModal}
+        onClose={() => setShowContactModal(false)}
+        event={event}
+      />
+
 
       {/* Role Warning Modal (for non-exhibitors like organizers) */}
       {showRoleWarningModal && (

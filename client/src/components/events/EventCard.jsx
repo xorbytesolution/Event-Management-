@@ -1,12 +1,13 @@
-// client/src/components/events/EventCard.jsx
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
+import ContactOrganizerModal from "./ContactOrganizerModal.jsx";
 
 import { formatDateTime } from "../../utils/dateUtils.js";
 
 function EventCard({ event }) {
   const [isFavorite, setIsFavorite] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
   const [showRoleWarningModal, setShowRoleWarningModal] = useState(false);
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
@@ -47,9 +48,9 @@ function EventCard({ event }) {
       return;
     }
 
-    // Direct phone call
-    window.location.href = `tel:${event.organizerPhone}`;
+    setShowContactModal(true);
   };
+
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-xs hover:shadow-md transition p-4 flex flex-col md:flex-row gap-6 items-start">
@@ -126,14 +127,14 @@ function EventCard({ event }) {
 
         {/* Actions */}
         <div className="flex justify-end items-center space-x-3 pt-1">
-          {event.organizerPhone && (
-            <button
-              onClick={handleContactOrganizer}
-              className="border px-4 py-2 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50"
-            >
-              📞 Call Organizer
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleContactOrganizer}
+            className="border border-slate-300 hover:border-orange-500 px-4 py-2 rounded-lg text-xs font-bold text-gray-700 hover:text-orange-600 hover:bg-orange-50/50 transition"
+          >
+            📞 Contact Organizer
+          </button>
+
           <Link
             to={`/events/details/${eventId}`}
             className="bg-orange-600 text-white font-extrabold px-5 py-2 rounded-lg text-xs shadow-md"
@@ -142,6 +143,7 @@ function EventCard({ event }) {
           </Link>
         </div>
       </div>
+
 
       {/* Role Warning Modal (for non-exhibitors like organizers) */}
       {showRoleWarningModal && (
@@ -197,8 +199,17 @@ function EventCard({ event }) {
           </div>
         </div>
       )}
+
+      {/* Contact Organizer Inquiry Modal */}
+      <ContactOrganizerModal
+        isOpen={showContactModal}
+        onClose={() => setShowContactModal(false)}
+        event={event}
+      />
+
     </div>
   );
 }
 
 export default EventCard;
+
