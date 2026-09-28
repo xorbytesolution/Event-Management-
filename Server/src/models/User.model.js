@@ -67,6 +67,13 @@ const userSchema = new mongoose.Schema(
       default: "active",
     },
 
+    favorites: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Event",
+      },
+    ],
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

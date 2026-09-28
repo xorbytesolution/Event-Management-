@@ -1,15 +1,17 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { useFavorites } from "../../context/FavoritesContext.jsx";
 import ContactOrganizerModal from "./ContactOrganizerModal.jsx";
 
 import { formatDateTime } from "../../utils/dateUtils.js";
 
 function EventCard({ event }) {
-  const [isFavorite, setIsFavorite] = useState(false);
+  const { isFavorite, toggleFavorite } = useFavorites();
   const [showContactModal, setShowContactModal] = useState(false);
   const [showRoleWarningModal, setShowRoleWarningModal] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated, user } = useAuth();
 
   // Normalize ID and Location
@@ -36,6 +38,7 @@ function EventCard({ event }) {
     if (!isAuthenticated) {
       navigate("/login", {
         state: {
+          from: location.pathname + location.search,
           message: "Please log in as an exhibitor to contact event organizers.",
         },
       });
@@ -82,10 +85,16 @@ function EventCard({ event }) {
               ID : {eventId}
             </span>
             <button
-              onClick={() => setIsFavorite(!isFavorite)}
-              className="text-xl"
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleFavorite(event._id || eventId, navigate, location.pathname);
+              }}
+              className="p-1 rounded-full text-xl transition-transform active:scale-125 hover:opacity-80 focus:outline-hidden"
+              aria-label={isFavorite(event._id || eventId) ? "Remove from favorites" : "Add to favorites"}
             >
-              {isFavorite ? "❤️" : "♡"}
+              {isFavorite(event._id || eventId) ? "❤️" : "♡"}
             </button>
           </div>
           <h3 className="text-lg sm:text-xl font-bold text-gray-800 mt-1">
@@ -190,6 +199,7 @@ function EventCard({ event }) {
               </button>
               <Link
                 to="/registration"
+                state={{ from: location.pathname + location.search }}
                 onClick={() => setShowRoleWarningModal(false)}
                 className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs shadow-sm transition"
               >

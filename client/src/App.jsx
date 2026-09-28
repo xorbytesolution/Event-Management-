@@ -1,13 +1,16 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import ScrollToTop from "./components/common/ScrollToTop.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { AdminAuthProvider } from "./context/AdminAuthContext.jsx";
+import { FavoritesProvider } from "./context/FavoritesContext.jsx";
+import Toast from "./components/common/Toast.jsx";
 
 import Home from "./pages/Home.jsx";
 import CreateEvent from "./pages/CreateEvent.jsx";
 import CityEventsPage from "./pages/CityEventsPage.jsx";
 import EventDetailsPage from "./pages/EventDetailsPage.jsx";
+import FavoritesPage from "./pages/FavoritesPage.jsx";
 import Login from "./pages/Login.jsx";
 import Registration from "./pages/Registration.jsx";
 import AdminEventSubmissions from "./pages/AdminEventSubmissions.jsx";
@@ -30,16 +33,20 @@ import AdminUserDetails from "./pages/admin/AdminUserDetails.jsx";
 import AdminProfile from "./pages/admin/AdminProfile.jsx";
 import AdminRoute from "./routes/AdminRoute.jsx";
 import OrganizerRoute from "./routes/OrganizerRoute.jsx";
+import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 
 function App() {
   return (
     <AuthProvider>
       <AdminAuthProvider>
-        <Router>
-          <ScrollToTop />
+        <FavoritesProvider>
+          <Router>
+            <ScrollToTop />
+            <Toast />
 
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/events" element={<Navigate to="/" replace />} />
             <Route path="/create-event" element={<CreateEvent />} />
             <Route path="/events/:cityName" element={<CityEventsPage />} />
             <Route path="/events/:city" element={<CityEventsPage />} />
@@ -101,8 +108,14 @@ function App() {
               </Route>
             </Route>
 
+            {/* Protected Favorites Route */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/favorites" element={<FavoritesPage />} />
+            </Route>
+
           </Routes>
         </Router>
+        </FavoritesProvider>
       </AdminAuthProvider>
     </AuthProvider>
   );

@@ -115,6 +115,7 @@ export const registerExhibitor = asyncHandler(async (req, res) => {
         phone: existingUser.phone,
         gender: existingUser.gender,
         roles: existingUser.roles,
+        favorites: existingUser.favorites || [],
       },
     });
   }
@@ -145,6 +146,7 @@ export const registerExhibitor = asyncHandler(async (req, res) => {
       phone: user.phone,
       gender: user.gender,
       roles: user.roles,
+      favorites: [],
     },
   });
 });
@@ -178,6 +180,7 @@ export const login = asyncHandler(async (req, res) => {
       phone: user.phone,
       gender: user.gender,
       roles: user.roles,
+      favorites: user.favorites || [],
     },
   });
 });

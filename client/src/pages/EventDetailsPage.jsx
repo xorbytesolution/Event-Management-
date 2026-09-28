@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { AlertCircle } from "lucide-react";
 import Navbar from "../components/layout/Navbar";
 import Footer from "../components/layout/Footer";
@@ -7,15 +7,18 @@ import SocialBanner from "../components/layout/SocialBanner";
 import api from "../services/api";
 
 import { useAuth } from "../context/AuthContext.jsx";
+import { useFavorites } from "../context/FavoritesContext.jsx";
 import { formatDateTime, formatScheduleRange } from "../utils/dateUtils.js";
 import ContactOrganizerModal from "../components/events/ContactOrganizerModal.jsx";
 
 function EventDetailsPage() {
+  const { isFavorite, toggleFavorite } = useFavorites();
 
 
 
   const { eventId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated, user } = useAuth();
 
   const [event, setEvent] = useState(null);
@@ -49,6 +52,7 @@ function EventDetailsPage() {
     if (!isAuthenticated) {
       navigate("/login", {
         state: {
+          from: location.pathname + location.search,
           message: "Please log in as an exhibitor to contact event organizers.",
         },
       });
@@ -172,9 +176,34 @@ function EventDetailsPage() {
                 />
               )}
               <div className="flex justify-between items-start z-10">
-                <span className="bg-black/60 text-cyan-300 font-mono text-xs px-2.5 py-1 rounded border border-cyan-400/30">
-                  ID: {displayId}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="bg-black/60 text-cyan-300 font-mono text-xs px-2.5 py-1 rounded border border-cyan-400/30">
+                    ID: {displayId}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      toggleFavorite(
+                        event._id || displayId,
+                        navigate,
+                        location.pathname,
+                      )
+                    }
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-base border border-white/20 transition hover:bg-black/80 active:scale-125"
+                    title={
+                      isFavorite(event._id || displayId)
+                        ? "Remove from Favorites"
+                        : "Save to Favorites"
+                    }
+                    aria-label={
+                      isFavorite(event._id || displayId)
+                        ? "Remove from Favorites"
+                        : "Save to Favorites"
+                    }
+                  >
+                    {isFavorite(event._id || displayId) ? "❤️" : "♡"}
+                  </button>
+                </div>
                 {startDateObj && (
                   <div className="bg-red-800 text-yellow-300 border-2 border-dashed border-yellow-400 rounded-full w-14 h-14 flex flex-col items-center justify-center text-[10px] font-black leading-tight shadow-md">
                     <span>{startDateObj.getDate()}</span>
@@ -219,12 +248,39 @@ function EventDetailsPage() {
             </div>
 
             {/* CTA Buttons */}
-            <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={handleContactOrganizer}
-                className="w-full bg-[#F25C05] hover:bg-orange-600 text-white font-extrabold text-sm py-3 rounded-xl shadow-md transition transform active:scale-95 text-center"
+                className="flex-1 bg-[#F25C05] hover:bg-orange-600 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-md transition transform active:scale-95 text-center"
               >
                 Contact Event Organizer
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  toggleFavorite(
+                    event._id || displayId,
+                    navigate,
+                    location.pathname,
+                  )
+                }
+                className={`flex items-center justify-center gap-2 font-bold text-sm py-3 px-4 rounded-xl border transition shadow-xs ${
+                  isFavorite(event._id || displayId)
+                    ? "border-red-300 bg-red-50 text-red-600 hover:bg-red-100"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+                title={
+                  isFavorite(event._id || displayId)
+                    ? "Remove from Favorites"
+                    : "Save to Favorites"
+                }
+              >
+                <span className="text-lg">
+                  {isFavorite(event._id || displayId) ? "❤️" : "♡"}
+                </span>
+                <span>
+                  {isFavorite(event._id || displayId) ? "Saved" : "Save"}
+                </span>
               </button>
             </div>
 
@@ -467,6 +523,7 @@ function EventDetailsPage() {
               </button>
               <Link
                 to="/registration"
+                state={{ from: location.pathname + location.search }}
                 onClick={() => setShowRoleWarningModal(false)}
                 className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs shadow-sm transition"
               >

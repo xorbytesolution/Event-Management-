@@ -7,6 +7,7 @@ import eventSubmissionRoutes from "./routes/eventSubmission.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import organizerRoutes from "./routes/organizer.routes.js";
 import inquiryRoutes from "./routes/inquiry.routes.js";
+import favoriteRoutes from "./routes/favorite.routes.js";
 import { errorHandler, notFound } from "./middlewares/error.middleware.js";
 
 import connectDB from "./config/db.config.js";
@@ -75,6 +76,7 @@ app.use("/api/event-submissions", eventSubmissionRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/organizer", organizerRoutes);
 app.use("/api/inquiries", inquiryRoutes);
+app.use("/api/favorites", favoriteRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

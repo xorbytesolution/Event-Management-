@@ -1,11 +1,13 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { useFavorites } from "../../context/FavoritesContext.jsx";
 import { useNavigate } from "react-router-dom";
 function Navbar() {
   const navigate = useNavigate();
 
   const { user, loading, logout, successMessage } = useAuth();
+  const { favoritesCount } = useFavorites();
   const [servicesOpen, setServicesOpen] = useState(false);
   const [citiesOpen, setCitiesOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -128,10 +130,12 @@ function Navbar() {
             {/* Favorites */}
             <Link
               to="/favorites"
-              className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-orange-50 hover:text-orange-600"
+              className="relative flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-orange-50 hover:text-orange-600"
             >
               <svg
-                className="h-4 w-4"
+                className={`h-4 w-4 transition-colors ${
+                  favoritesCount > 0 ? "text-red-500 fill-red-500" : ""
+                }`}
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -143,7 +147,12 @@ function Navbar() {
                   d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z"
                 />
               </svg>
-              My Favorites
+              <span>My Favorites</span>
+              {favoritesCount > 0 && (
+                <span className="ml-0.5 inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-extrabold text-white">
+                  {favoritesCount}
+                </span>
+              )}
             </Link>
 
             {/* Cities */}
@@ -303,9 +312,19 @@ function Navbar() {
               <Link
                 to="/favorites"
                 onClick={() => setMobileOpen(false)}
-                className="rounded-lg px-3 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-orange-50 hover:text-orange-600"
+                className="flex items-center justify-between rounded-lg px-3 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-orange-50 hover:text-orange-600"
               >
-                ♡ My Favorites
+                <span className="flex items-center gap-2">
+                  <span className={favoritesCount > 0 ? "text-red-500" : ""}>
+                    {favoritesCount > 0 ? "❤️" : "♡"}
+                  </span>
+                  <span>My Favorites</span>
+                </span>
+                {favoritesCount > 0 && (
+                  <span className="inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+                    {favoritesCount}
+                  </span>
+                )}
               </Link>
 
               {user ? (

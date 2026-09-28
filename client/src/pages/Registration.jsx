@@ -5,39 +5,10 @@ import Navbar from "../components/layout/Navbar";
 import Footer from "../components/layout/Footer";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext.jsx";
-
-const CATEGORIES = [
-  "Mens Wear",
-  "Kids Wear",
-  "Home Decor",
-  "Handicrafts",
-  "Organic Products",
-  "Promotional Stalls",
-  "Food Stalls",
-  "Jewellery",
-  "Bridal & Ethnic Wear",
-  "Automobiles",
-  "Sports Wear",
-  "Fashion Accessories",
-  "Devotional Products",
-  "Footwear",
-  "Stationary & Books",
-  "Health & Medical",
-  "Electronic Gadgets",
-  "Kitchenware",
-  "Women Wear",
-  "Handmade Products",
-  "Cosmetics & Beauty",
-  "Startups",
-  "Home Furnishing",
-  "Real Estate",
-  "Fitness Equipments",
-  "Nutrition & Wellness",
-  "Home Appliances",
-  "Toys",
-  "NGO's",
-  "Others",
-];
+import {
+  CATEGORIES_LIST,
+  registrationSchema,
+} from "../validations/registration.validation";
 
 function Registration() {
   const navigate = useNavigate();
@@ -64,6 +35,8 @@ function Registration() {
   const [showCategories, setShowCategories] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
+  // Field-level validation errors & server-level error
+  const [validationErrors, setValidationErrors] = useState({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -85,87 +58,96 @@ function Registration() {
     }
   }, [user, isOrganizerUpgrading]);
 
+  // Validation helpers
+  const getFieldError = (field) => validationErrors[field];
+  const hasFieldError = (field) => Boolean(validationErrors[field]);
+
+  const getInputClass = (fieldName, extraClasses = "") => `
+    w-full rounded-lg border px-4 py-3 text-sm outline-none transition
+    ${
+      hasFieldError(fieldName)
+        ? "border-red-400 bg-red-50/50 text-slate-800 focus:border-red-500 focus:ring-2 focus:ring-red-500/10"
+        : "border-slate-300 bg-slate-50 text-slate-800 placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10"
+    } ${extraClasses}
+  `;
+
   const handleChange = (e) => {
     const { name, value } = e.target;
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    let updatedValue = value;
+
+    // Mobile number: only digits, max 10 digits
+    if (name === "mobile") {
+      updatedValue = value.replace(/\D/g, "").slice(0, 10);
+    }
+
+    const updatedFormData = {
+      ...formData,
+      [name]: updatedValue,
+    };
+
+    setFormData(updatedFormData);
+
+    // If there are existing validation errors, re-evaluate touched field(s) in real-time
+    if (Object.keys(validationErrors).length > 0) {
+      const validationData = {
+        ...updatedFormData,
+        categories: selectedCategories,
+        termsAccepted,
+      };
+
+      const result = registrationSchema.safeParse(validationData);
+      const fieldsToCheck =
+        name === "password" || name === "confirmPassword"
+          ? ["password", "confirmPassword"]
+          : [name];
+
+      setValidationErrors((prev) => {
+        const updated = { ...prev };
+
+        fieldsToCheck.forEach((f) => {
+          delete updated[f];
+        });
+
+        if (!result.success) {
+          result.error.issues.forEach((issue) => {
+            const field = issue.path[0];
+            if (fieldsToCheck.includes(field) && !updated[field]) {
+              updated[field] = issue.message;
+            }
+          });
+        }
+
+        return updated;
+      });
+    }
 
     setError("");
   };
 
   const toggleCategory = (category) => {
-    setSelectedCategories((prev) =>
-      prev.includes(category)
-        ? prev.filter((item) => item !== category)
-        : [...prev, category],
-    );
+    const updated = selectedCategories.includes(category)
+      ? selectedCategories.filter((item) => item !== category)
+      : [...selectedCategories, category];
+
+    setSelectedCategories(updated);
+
+    if (validationErrors.categories) {
+      if (updated.length > 0) {
+        setValidationErrors((prev) => {
+          const next = { ...prev };
+          delete next.categories;
+          return next;
+        });
+      } else {
+        setValidationErrors((prev) => ({
+          ...prev,
+          categories: "Please select at least one category",
+        }));
+      }
+    }
 
     setError("");
-  };
-
-  const validateForm = () => {
-    if (!formData.mobile.trim()) {
-      return "Mobile number is required";
-    }
-
-    if (!/^\d{10}$/.test(formData.mobile.trim())) {
-      return "Please enter a valid 10-digit mobile number";
-    }
-
-    if (!formData.firstName.trim()) {
-      return "First name is required";
-    }
-
-    if (formData.firstName.trim().length < 2) {
-      return "First name must be at least 2 characters";
-    }
-
-    if (!formData.email.trim()) {
-      return "Email is required";
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      return "Please enter a valid email address";
-    }
-
-    if (!formData.gender) {
-      return "Please select your gender";
-    }
-
-    if (selectedCategories.length === 0) {
-      return "Please select at least one category";
-    }
-
-    if (!formData.password) {
-      return isOrganizerUpgrading
-        ? "Please enter your account password to confirm ownership"
-        : "Password is required";
-    }
-
-    if (formData.password.length < 8) {
-      return "Password must be at least 8 characters";
-    }
-
-    if (formData.password.length > 128) {
-      return "Password cannot exceed 128 characters";
-    }
-
-    if (!formData.confirmPassword) {
-      return "Please confirm your password";
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      return "Passwords do not match";
-    }
-
-    if (!termsAccepted) {
-      return "Please accept the Terms & Conditions";
-    }
-
-    return null;
   };
 
   const handleSubmit = async (e) => {
@@ -173,13 +155,37 @@ function Registration() {
 
     setError("");
 
-    const validationError = validateForm();
+    const validationData = {
+      mobile: formData.mobile,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      password: formData.password,
+      confirmPassword: formData.confirmPassword,
+      gender: formData.gender,
+      categories: selectedCategories,
+      termsAccepted,
+    };
 
-    if (validationError) {
-      setError(validationError);
+    // ---------------------------------
+    // Zod Schema Validation
+    // ---------------------------------
+    const validationResult = registrationSchema.safeParse(validationData);
+
+    if (!validationResult.success) {
+      const fieldErrors = {};
+      validationResult.error.issues.forEach((issue) => {
+        const fieldName = issue.path[0];
+        if (!fieldErrors[fieldName]) {
+          fieldErrors[fieldName] = issue.message;
+        }
+      });
+
+      setValidationErrors(fieldErrors);
       return;
     }
 
+    setValidationErrors({});
     setLoading(true);
 
     try {
@@ -200,14 +206,16 @@ function Registration() {
       if (isAuthenticated || isOrganizerUpgrading) {
         // Refresh AuthContext session so user.roles immediately has ["organizer", "exhibitor"]
         await checkAuth();
-        showSuccessMessage?.(
-          data?.message || "Exhibitor access added to your account!"
-        );
-        navigate(location.state?.from || "/events", {
+        const successMsg =
+          data?.message ||
+          "Exhibitor access added to your account successfully! You can now contact event organizers.";
+        showSuccessMessage?.(successMsg);
+
+        const returnUrl = location.state?.from || "/";
+        navigate(returnUrl, {
+          replace: true,
           state: {
-            successMessage:
-              data?.message ||
-              "Exhibitor access added to your account successfully! You can now contact event organizers.",
+            successMessage: successMsg,
           },
         });
       } else {
@@ -217,10 +225,33 @@ function Registration() {
             successMessage:
               data?.message ||
               "Registration successful! Please log in to continue.",
+            from: location.state?.from,
           },
         });
       }
     } catch (requestError) {
+      const backendErrors = requestError.response?.data?.errors;
+
+      // Handle field-level backend validation errors
+      if (Array.isArray(backendErrors)) {
+        const errors = {};
+        backendErrors.forEach((issue) => {
+          const path = issue.path;
+          const field = Array.isArray(path) ? path[0] : path;
+          if (field) {
+            const key = field === "phone" ? "mobile" : field;
+            if (!errors[key]) {
+              errors[key] = issue.message;
+            }
+          }
+        });
+
+        if (Object.keys(errors).length > 0) {
+          setValidationErrors(errors);
+          return;
+        }
+      }
+
       setError(
         requestError.response?.data?.message ||
           "Unable to complete registration. Please check your credentials and try again.",
@@ -244,14 +275,21 @@ function Registration() {
               Already Registered as an Exhibitor
             </h2>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Your account (<span className="font-semibold text-slate-800">{user?.email}</span>) already has active Exhibitor access. You have full permissions to inquire about stalls and contact event organizers.
+              Your account (
+              <span className="font-semibold text-slate-800">
+                {user?.email}
+              </span>
+              ) already has active Exhibitor access. You have full permissions
+              to inquire about stalls and contact event organizers.
             </p>
             <div className="pt-2 flex flex-col sm:flex-row gap-2 justify-center">
               <Link
-                to="/events"
+                to={location.state?.from || "/"}
                 className="rounded-lg bg-orange-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-orange-700 transition shadow-xs"
               >
-                Browse Events & Stalls
+                {location.state?.from
+                  ? "Return to Event"
+                  : "Browse Events & Stalls"}
               </Link>
               {user?.roles?.includes("organizer") && (
                 <Link
@@ -301,7 +339,7 @@ function Registration() {
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="px-6 py-6">
+            <form onSubmit={handleSubmit} noValidate className="px-6 py-6">
               <div className="space-y-5">
                 {isOrganizerUpgrading && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 text-xs text-amber-900 space-y-1">
@@ -318,9 +356,9 @@ function Registration() {
                   </div>
                 )}
 
-                {/* Error */}
+                {/* General / Server Error */}
                 {error && (
-                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
                     {error}
                   </div>
                 )}
@@ -340,18 +378,25 @@ function Registration() {
 
                   <input
                     type="tel"
+                    inputMode="numeric"
                     name="mobile"
                     value={formData.mobile}
                     onChange={handleChange}
                     readOnly={isOrganizerUpgrading}
                     placeholder="Enter mobile number"
                     maxLength={10}
-                    className={`w-full rounded-lg border border-slate-300 px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 ${
+                    className={getInputClass(
+                      "mobile",
                       isOrganizerUpgrading
-                        ? "bg-slate-100/80 cursor-not-allowed text-slate-600"
-                        : "bg-slate-50 focus:bg-white"
-                    }`}
+                        ? "!bg-slate-100/80 cursor-not-allowed text-slate-600"
+                        : "",
+                    )}
                   />
+                  {hasFieldError("mobile") && (
+                    <p className="mt-1.5 text-xs font-medium text-red-600">
+                      {getFieldError("mobile")}
+                    </p>
+                  )}
                 </div>
 
                 {/* First Name */}
@@ -366,8 +411,13 @@ function Registration() {
                     value={formData.firstName}
                     onChange={handleChange}
                     placeholder="First Name"
-                    className="w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10"
+                    className={getInputClass("firstName")}
                   />
+                  {hasFieldError("firstName") && (
+                    <p className="mt-1.5 text-xs font-medium text-red-600">
+                      {getFieldError("firstName")}
+                    </p>
+                  )}
                 </div>
 
                 {/* Last Name */}
@@ -382,8 +432,13 @@ function Registration() {
                     value={formData.lastName}
                     onChange={handleChange}
                     placeholder="Last Name"
-                    className="w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10"
+                    className={getInputClass("lastName")}
                   />
+                  {hasFieldError("lastName") && (
+                    <p className="mt-1.5 text-xs font-medium text-red-600">
+                      {getFieldError("lastName")}
+                    </p>
+                  )}
                 </div>
 
                 {/* Email */}
@@ -406,12 +461,18 @@ function Registration() {
                     onChange={handleChange}
                     readOnly={isOrganizerUpgrading}
                     placeholder="Email"
-                    className={`w-full rounded-lg border border-slate-300 px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 ${
+                    className={getInputClass(
+                      "email",
                       isOrganizerUpgrading
-                        ? "bg-slate-100/80 cursor-not-allowed text-slate-600"
-                        : "bg-slate-50 focus:bg-white"
-                    }`}
+                        ? "!bg-slate-100/80 cursor-not-allowed text-slate-600"
+                        : "",
+                    )}
                   />
+                  {hasFieldError("email") && (
+                    <p className="mt-1.5 text-xs font-medium text-red-600">
+                      {getFieldError("email")}
+                    </p>
+                  )}
                 </div>
 
                 {/* Password */}
@@ -434,7 +495,7 @@ function Registration() {
                           ? "Enter your existing account password"
                           : "Create a password"
                       }
-                      className="w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 pr-11 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10"
+                      className={getInputClass("password", "pr-11")}
                     />
 
                     <button
@@ -449,11 +510,17 @@ function Registration() {
                     </button>
                   </div>
 
-                  <p className="mt-1.5 text-xs text-slate-400">
-                    {isOrganizerUpgrading
-                      ? "Enter your existing password to verify ownership and link exhibitor privileges"
-                      : "Minimum 8 characters"}
-                  </p>
+                  {hasFieldError("password") ? (
+                    <p className="mt-1.5 text-xs font-medium text-red-600">
+                      {getFieldError("password")}
+                    </p>
+                  ) : (
+                    <p className="mt-1.5 text-xs text-slate-400">
+                      {isOrganizerUpgrading
+                        ? "Enter your existing password to verify ownership and link exhibitor privileges"
+                        : "Minimum 8 characters"}
+                    </p>
+                  )}
                 </div>
 
                 {/* Confirm Password */}
@@ -476,7 +543,7 @@ function Registration() {
                           ? "Confirm your account password"
                           : "Confirm your password"
                       }
-                      className="w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 pr-11 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10"
+                      className={getInputClass("confirmPassword", "pr-11")}
                     />
 
                     <button
@@ -498,6 +565,12 @@ function Registration() {
                       )}
                     </button>
                   </div>
+
+                  {hasFieldError("confirmPassword") && (
+                    <p className="mt-1.5 text-xs font-medium text-red-600">
+                      {getFieldError("confirmPassword")}
+                    </p>
+                  )}
                 </div>
 
                 {/* Gender */}
@@ -533,6 +606,12 @@ function Registration() {
                       <span className="text-sm text-slate-600">Female</span>
                     </label>
                   </div>
+
+                  {hasFieldError("gender") && (
+                    <p className="mt-1.5 text-xs font-medium text-red-600">
+                      {getFieldError("gender")}
+                    </p>
+                  )}
                 </fieldset>
 
                 {/* Categories */}
@@ -544,7 +623,11 @@ function Registration() {
                   <button
                     type="button"
                     onClick={() => setShowCategories(true)}
-                    className="flex w-full items-center justify-between rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-left text-sm transition hover:border-slate-400"
+                    className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition ${
+                      hasFieldError("categories")
+                        ? "border-red-400 bg-red-50/50"
+                        : "border-slate-300 bg-slate-50 hover:border-slate-400"
+                    }`}
                   >
                     <span
                       className={
@@ -576,6 +659,12 @@ function Registration() {
                       ))}
                     </div>
                   )}
+
+                  {hasFieldError("categories") && (
+                    <p className="mt-1.5 text-xs font-medium text-red-600">
+                      {getFieldError("categories")}
+                    </p>
+                  )}
                 </div>
 
                 {/* Terms */}
@@ -585,7 +674,23 @@ function Registration() {
                       type="checkbox"
                       checked={termsAccepted}
                       onChange={(e) => {
-                        setTermsAccepted(e.target.checked);
+                        const checked = e.target.checked;
+                        setTermsAccepted(checked);
+                        if (validationErrors.termsAccepted) {
+                          if (checked) {
+                            setValidationErrors((prev) => {
+                              const next = { ...prev };
+                              delete next.termsAccepted;
+                              return next;
+                            });
+                          } else {
+                            setValidationErrors((prev) => ({
+                              ...prev,
+                              termsAccepted:
+                                "Please accept the Terms & Conditions",
+                            }));
+                          }
+                        }
                         setError("");
                       }}
                       className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-orange-500"
@@ -601,6 +706,12 @@ function Registration() {
                       </Link>
                     </span>
                   </label>
+
+                  {hasFieldError("termsAccepted") && (
+                    <p className="mt-1.5 text-xs font-medium text-red-600">
+                      {getFieldError("termsAccepted")}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -661,7 +772,7 @@ function Registration() {
 
             {/* Categories */}
             <div className="grid max-h-[55vh] grid-cols-1 gap-3 overflow-y-auto p-6 sm:grid-cols-2 md:grid-cols-3">
-              {CATEGORIES.map((category) => {
+              {CATEGORIES_LIST.map((category) => {
                 const selected = selectedCategories.includes(category);
 
                 return (
