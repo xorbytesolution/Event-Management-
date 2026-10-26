@@ -27,6 +27,11 @@ export const createInquiry = asyncHandler(async (req, res) => {
     deletedAt: null,
   });
 
+  // Prevent inquiries on expired events
+  if (event.endDate && event.endDate < new Date()) {
+    throw new ApiError(400, "Cannot submit an inquiry for an expired event.");
+  }
+
   if (!event) {
     throw new ApiError(404, "Event not found or no longer active.");
   }

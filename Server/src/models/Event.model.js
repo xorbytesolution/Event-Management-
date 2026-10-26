@@ -354,6 +354,8 @@ const eventSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Flag to indicate the event has been archived after its end date
+    isArchived: { type: Boolean, default: false },
   },
   {
     timestamps: true,
