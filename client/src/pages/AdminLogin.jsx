@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { Eye, EyeOff } from "lucide-react";
+import { useNavigate, useLocation, Link } from "react-router-dom";
+import { Eye, EyeOff, ArrowLeft } from "lucide-react";
 import api from "../services/api";
 import { useAdminAuth } from "../context/AdminAuthContext.jsx";
 
@@ -80,82 +80,106 @@ function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-      <form
-        onSubmit={submit}
-        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-7 shadow-sm space-y-5"
-      >
-        <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-orange-500">
-            Administration
-          </p>
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-8">
+      <div className="w-full max-w-md space-y-3.5">
+        {/* Back to Main Page quick link above card */}
+        {/* <div>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-orange-600 transition"
+          >
+            <ArrowLeft size={14} />
+            <span>Back to Main Page</span>
+          </Link>
+        </div> */}
 
-          <h1 className="mt-1 text-2xl font-extrabold text-slate-900">
-            Admin Login
-          </h1>
-
-          <p className="mt-2 text-sm text-slate-500">
-            Sign in to manage event submissions.
-          </p>
-        </div>
-
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
-        <div>
-          <label className="block text-sm font-semibold text-slate-700">
-            Email
-          </label>
-
-          <input
-            name="email"
-            type="email"
-            value={formData.email}
-            onChange={handleChange}
-            placeholder="Admin email"
-            autoComplete="email"
-            className="mt-1.5 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 outline-none focus:border-orange-500 focus:bg-white"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold text-slate-700">
-            Password
-          </label>
-
-          <div className="relative mt-1.5">
-            <input
-              name="password"
-              type={showPassword ? "text" : "password"}
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="Admin password"
-              autoComplete="current-password"
-              className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 pr-10 outline-none focus:border-orange-500 focus:bg-white"
-            />
-
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 focus:outline-hidden"
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+        <form
+          onSubmit={submit}
+          className="w-full rounded-2xl border border-slate-200 bg-white p-7 shadow-sm space-y-5"
         >
-          {loading ? "Logging in…" : "Admin Login"}
-        </button>
-      </form>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-orange-500">
+              Administration
+            </p>
+
+            <h1 className="mt-1 text-2xl font-extrabold text-slate-900">
+              Admin Login
+            </h1>
+
+            <p className="mt-2 text-sm text-slate-500">
+              Sign in to manage event submissions.
+            </p>
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-semibold text-slate-700">
+              Email
+            </label>
+
+            <input
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="Admin email"
+              autoComplete="email"
+              className="mt-1.5 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 outline-none focus:border-orange-500 focus:bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-slate-700">
+              Password
+            </label>
+
+            <div className="relative mt-1.5">
+              <input
+                name="password"
+                type={showPassword ? "text" : "password"}
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="Admin password"
+                autoComplete="current-password"
+                className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 pr-10 outline-none focus:border-orange-500 focus:bg-white"
+              />
+
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 focus:outline-hidden"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60 transition"
+          >
+            {loading ? "Logging in…" : "Admin Login"}
+          </button>
+
+          {/* Secondary Back link inside card footer */}
+          <div className="pt-2 text-center border-t border-slate-100">
+            <Link
+              to="/"
+              className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-orange-600 transition"
+            >
+              <ArrowLeft size={13} />
+              <span>Back to Main Page</span>
+            </Link>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

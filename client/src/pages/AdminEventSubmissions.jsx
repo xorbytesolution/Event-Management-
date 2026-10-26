@@ -18,6 +18,7 @@ import {
   Sparkles,
   X,
   KeyRound,
+  Search,
 } from "lucide-react";
 import api from "../services/api";
 import { formatScheduleRange } from "../utils/dateUtils";
@@ -26,6 +27,8 @@ function AdminEventSubmissions() {
   const navigate = useNavigate();
   const [submissions, setSubmissions] = useState([]);
   const [status, setStatus] = useState("pending");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({
     page: 1,
@@ -35,6 +38,16 @@ function AdminEventSubmissions() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      setSearchTerm(searchInput.trim());
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   // Modal states & selected submission
   const [selectedSubmission, setSelectedSubmission] = useState(null);
@@ -65,13 +78,18 @@ function AdminEventSubmissions() {
 
     try {
       const [{ data }] = await Promise.all([
-        api.get(
-          `/admin/event-submissions?status=${status}&page=${page}&limit=10`,
-        ),
-        new Promise((resolve) => setTimeout(resolve, 800)),
+        api.get("/admin/event-submissions", {
+          params: {
+            status,
+            page,
+            limit: 10,
+            ...(searchTerm ? { search: searchTerm } : {}),
+          },
+        }),
+        new Promise((resolve) => setTimeout(resolve, 600)),
       ]);
 
-      setSubmissions(data.submissions);
+      setSubmissions(data.submissions || []);
 
       setPagination(
         data.pagination || {
@@ -93,7 +111,7 @@ function AdminEventSubmissions() {
 
   useEffect(() => {
     load();
-  }, [status, page]);
+  }, [status, page, searchTerm]);
 
   const handleOpenApprove = async (sub) => {
     setSelectedSubmission(sub);
@@ -260,14 +278,44 @@ function AdminEventSubmissions() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            {/* Search Input */}
+            <div className="relative w-full sm:w-64 lg:w-72">
+              <Search
+                size={16}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search title, city, organizer..."
+                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100 placeholder:text-slate-400"
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchInput("");
+                    setSearchTerm("");
+                    setPage(1);
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                  aria-label="Clear search"
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </div>
+
+            {/* Status Dropdown */}
             <select
               value={status}
               onChange={(e) => {
                 setStatus(e.target.value);
                 setPage(1);
               }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100 shrink-0"
               aria-label="Filter submissions by status"
             >
               <option value="pending">Pending</option>
@@ -281,7 +329,7 @@ function AdminEventSubmissions() {
               type="button"
               onClick={load}
               disabled={loading}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 shrink-0"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
 
@@ -315,8 +363,24 @@ function AdminEventSubmissions() {
             </p>
 
             <p className="mt-1 text-sm text-slate-500">
-              There are no event submissions matching the selected status.
+              {searchTerm
+                ? `No submissions found matching "${searchTerm}". Try a different keyword or change status filter.`
+                : "There are no event submissions matching the selected status."}
             </p>
+
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchInput("");
+                  setSearchTerm("");
+                  setPage(1);
+                }}
+                className="mt-3 inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+              >
+                Clear Search
+              </button>
+            )}
           </div>
         ) : (
           <>

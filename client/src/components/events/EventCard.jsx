@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useFavorites } from "../../context/FavoritesContext.jsx";
 import ContactOrganizerModal from "./ContactOrganizerModal.jsx";
+import api from "../../services/api.js";
 
 import { formatDateTime } from "../../utils/dateUtils.js";
 
@@ -10,6 +11,7 @@ function EventCard({ event }) {
   const { isFavorite, toggleFavorite } = useFavorites();
   const [showContactModal, setShowContactModal] = useState(false);
   const [showRoleWarningModal, setShowRoleWarningModal] = useState(false);
+  const [inquiryData, setInquiryData] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, user } = useAuth();
@@ -34,6 +36,44 @@ function EventCard({ event }) {
       }))
     : event.pricingOptions || [];
 
+  // Check if current logged-in user is the organizer of this event
+  const isHostOrganizer =
+    user &&
+    event &&
+    Boolean(
+      (event.organizerId &&
+        String(event.organizerId?._id || event.organizerId) ===
+          String(user._id || user.id)) ||
+        (event.organizerEmail &&
+          event.organizerEmail.toLowerCase() === user.email?.toLowerCase()) ||
+        (event.organizerPhone && event.organizerPhone === user.phone),
+    );
+
+  // Check if current user has an active inquiry for this event
+  useEffect(() => {
+    const checkInquiry = async () => {
+      const eventIdentifier = event?._id || event?.publicId || eventId;
+      if (
+        isAuthenticated &&
+        user?.roles?.includes("exhibitor") &&
+        !isHostOrganizer &&
+        eventIdentifier
+      ) {
+        try {
+          const { data } = await api.get(`/inquiries/check/${eventIdentifier}`);
+          setInquiryData(data);
+        } catch (err) {
+          console.debug("Inquiry check in EventCard:", err);
+        }
+      } else {
+        setInquiryData(null);
+      }
+    };
+    if (event) {
+      checkInquiry();
+    }
+  }, [event, eventId, isAuthenticated, user, isHostOrganizer]);
+
   const handleContactOrganizer = () => {
     if (!isAuthenticated) {
       navigate("/login", {
@@ -42,6 +82,11 @@ function EventCard({ event }) {
           message: "Please log in as an exhibitor to contact event organizers.",
         },
       });
+      return;
+    }
+
+    if (isHostOrganizer) {
+      navigate(`/organizer/events/${eventId}`);
       return;
     }
 
@@ -72,6 +117,29 @@ function EventCard({ event }) {
             </h3>
           </div>
         )}
+        {/* Real-time Exhibitor Inquiry Status Pill */}
+        {inquiryData?.hasInquiry && (
+          <div className="absolute top-2.5 left-2.5 z-20">
+            {inquiryData.status === "booked" ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-600/95 backdrop-blur-xs px-2.5 py-1 text-[10px] font-extrabold text-white shadow-md">
+                🎪 Stall Booked ({inquiryData?.inquiry?.stallsBooked || 1})
+              </span>
+            ) : inquiryData.status === "accepted" ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600/95 backdrop-blur-xs px-2.5 py-1 text-[10px] font-extrabold text-white shadow-md">
+                ✅ Inquired: Approved
+              </span>
+            ) : inquiryData.status === "new" ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/95 backdrop-blur-xs px-2.5 py-1 text-[10px] font-extrabold text-white shadow-md">
+                ⏳ Inquired: Pending
+              </span>
+            ) : inquiryData.status === "rejected" ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-rose-600/95 backdrop-blur-xs px-2.5 py-1 text-[10px] font-extrabold text-white shadow-md">
+                ❌ Inquired: Declined
+              </span>
+            ) : null}
+          </div>
+        )}
+
         <div className="z-10 bg-amber-950/80 text-amber-200 text-xs font-bold px-3 py-1.5 rounded-lg text-center truncate">
           {venue}
         </div>
@@ -136,13 +204,62 @@ function EventCard({ event }) {
 
         {/* Actions */}
         <div className="flex justify-end items-center space-x-3 pt-1">
-          <button
-            type="button"
-            onClick={handleContactOrganizer}
-            className="border border-slate-300 hover:border-orange-500 px-4 py-2 rounded-lg text-xs font-bold text-gray-700 hover:text-orange-600 hover:bg-orange-50/50 transition"
-          >
-            📞 Contact Organizer
-          </button>
+          {isHostOrganizer ? (
+            <Link
+              to={`/organizer/events/${eventId}`}
+              className="inline-flex items-center gap-1.5 border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:border-purple-300 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-2xs"
+              title="You are hosting this event. Manage stalls and inquiries in your Organizer Portal."
+            >
+              <span>👑 Your Event</span>
+              <span className="text-[10px] text-purple-500 font-semibold">
+                (Manage)
+              </span>
+            </Link>
+          ) : inquiryData?.hasInquiry && inquiryData?.status === "new" ? (
+            <button
+              type="button"
+              onClick={() => setShowContactModal(true)}
+              className="inline-flex items-center gap-1.5 border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-2xs"
+              title="Inquiry is pending review. Click to view details."
+            >
+              <span>⏳</span>
+              <span>Pending Review</span>
+            </button>
+          ) : inquiryData?.hasInquiry && inquiryData?.status === "booked" ? (
+            <button
+              type="button"
+              onClick={() => setShowContactModal(true)}
+              className="inline-flex items-center gap-1.5 border border-indigo-300 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-2xs"
+              title="Stall booking is confirmed! Click to view details."
+            >
+              <span>🎪</span>
+              <span>Stall Booked ({inquiryData?.inquiry?.stallsBooked || 1})</span>
+            </button>
+          ) : inquiryData?.hasInquiry && inquiryData?.status === "accepted" ? (
+            <button
+              type="button"
+              onClick={() => setShowContactModal(true)}
+              className="inline-flex items-center gap-1.5 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-2xs"
+              title="Stall inquiry accepted! Click to view details."
+            >
+              <span>✅</span>
+              <span>Stall Accepted!</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleContactOrganizer}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
+                inquiryData?.status === "rejected"
+                  ? "border border-orange-300 bg-orange-50/50 hover:bg-orange-100 text-orange-700 hover:border-orange-500 shadow-2xs"
+                  : "border border-slate-300 hover:border-orange-500 text-gray-700 hover:text-orange-600 hover:bg-orange-50/50"
+              }`}
+            >
+              {inquiryData?.status === "rejected"
+                ? "Submit Fresh Inquiry"
+                : "📞 Contact Organizer"}
+            </button>
+          )}
 
           <Link
             to={`/events/details/${eventId}`}
@@ -215,6 +332,10 @@ function EventCard({ event }) {
         isOpen={showContactModal}
         onClose={() => setShowContactModal(false)}
         event={event}
+        inquiryInfo={inquiryData}
+        onInquirySuccess={(updated) => {
+          setInquiryData(updated);
+        }}
       />
 
     </div>

@@ -39,8 +39,10 @@ export const createInquirySchema = z.object({
 });
 
 export const updateInquiryStatusSchema = z.object({
-  status: z.enum(["new", "accepted", "rejected", "contacted", "closed"], {
+  status: z.enum(["new", "accepted", "rejected", "contacted", "closed", "booked"], {
     required_error: "Status is required",
   }),
+  stallsBooked: z.coerce.number().int().min(1, "At least 1 stall must be booked").max(1000).optional(),
+  bookingNotes: z.string().trim().max(1000).optional().default(""),
 });
 

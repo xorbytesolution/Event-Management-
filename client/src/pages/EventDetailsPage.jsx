@@ -14,8 +14,6 @@ import ContactOrganizerModal from "../components/events/ContactOrganizerModal.js
 function EventDetailsPage() {
   const { isFavorite, toggleFavorite } = useFavorites();
 
-
-
   const { eventId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,6 +24,7 @@ function EventDetailsPage() {
   const [error, setError] = useState("");
   const [showContactModal, setShowContactModal] = useState(false);
   const [showRoleWarningModal, setShowRoleWarningModal] = useState(false);
+  const [inquiryData, setInquiryData] = useState(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -48,6 +47,44 @@ function EventDetailsPage() {
     }
   }, [eventId]);
 
+  // Check if current logged-in user is the organizer of this event
+  const isHostOrganizer =
+    user &&
+    event &&
+    Boolean(
+      (event.organizerId &&
+        String(event.organizerId?._id || event.organizerId) ===
+          String(user._id || user.id)) ||
+      (event.organizerEmail &&
+        event.organizerEmail.toLowerCase() === user.email?.toLowerCase()) ||
+      (event.organizerPhone && event.organizerPhone === user.phone),
+    );
+
+  // Check if current user has an active inquiry for this event
+  useEffect(() => {
+    const checkInquiry = async () => {
+      const eventIdentifier = event?._id || event?.publicId || eventId;
+      if (
+        isAuthenticated &&
+        user?.roles?.includes("exhibitor") &&
+        !isHostOrganizer &&
+        eventIdentifier
+      ) {
+        try {
+          const { data } = await api.get(`/inquiries/check/${eventIdentifier}`);
+          setInquiryData(data);
+        } catch (err) {
+          console.debug("Inquiry check:", err);
+        }
+      } else {
+        setInquiryData(null);
+      }
+    };
+    if (event) {
+      checkInquiry();
+    }
+  }, [event, eventId, isAuthenticated, user, isHostOrganizer]);
+
   const handleContactOrganizer = () => {
     if (!isAuthenticated) {
       navigate("/login", {
@@ -56,6 +93,12 @@ function EventDetailsPage() {
           message: "Please log in as an exhibitor to contact event organizers.",
         },
       });
+      return;
+    }
+
+    if (isHostOrganizer) {
+      const displayId = event.publicId || event._id || event.id;
+      navigate(`/organizer/events/${displayId}`);
       return;
     }
 
@@ -133,6 +176,11 @@ function EventDetailsPage() {
     : event.pricingOptions || [];
 
   const displayId = event.publicId || event._id || event.id;
+  const organizerName =
+    event.organizerName ||
+    event.organizerId?.name ||
+    event.organizerCompany ||
+    "Organizer";
   const venueAddress =
     event.address || event.venue || "Venue address available upon request";
   const cityDisplay = event.city
@@ -247,14 +295,150 @@ function EventDetailsPage() {
               </div>
             </div>
 
+            {/* Host Organizer Banner */}
+            {isHostOrganizer && (
+              <div className="rounded-xl border border-purple-200 bg-purple-50/90 p-3.5 text-xs text-purple-900 shadow-2xs space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold flex items-center gap-1.5 text-purple-800">
+                    <span>👑</span> You are the Host of this Event
+                  </span>
+                  <Link
+                    to="/organizer/inquiries"
+                    className="font-bold text-purple-700 hover:text-purple-900 hover:underline"
+                  >
+                    View Inquiries →
+                  </Link>
+                </div>
+                <p className="text-[11px] text-purple-700 leading-relaxed">
+                  Stall inquiry is disabled for your own event. You can manage
+                  stall bookings, pricing, and inquiries from your Organizer
+                  Portal.
+                </p>
+              </div>
+            )}
+
+            {/* Inquiry Status Banners (for exhibitors) */}
+            {!isHostOrganizer &&
+              inquiryData?.hasInquiry &&
+              inquiryData?.status === "new" && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-3.5 text-xs text-amber-900 shadow-2xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-extrabold text-amber-800">
+                    <span>⏳</span>
+                    <span>
+                      Inquiry Already Submitted (Status: Pending Review)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-700 leading-relaxed">
+                    Your stall inquiry has been received and is currently under
+                    review by <strong>{organizerName}</strong>. Duplicate
+                    inquiries are restricted to prevent spam.
+                  </p>
+                </div>
+              )}
+
+            {!isHostOrganizer &&
+              inquiryData?.hasInquiry &&
+              inquiryData?.status === "booked" && (
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50/90 p-3.5 text-xs text-indigo-900 shadow-2xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-extrabold text-indigo-800">
+                    <span>🎪</span>
+                    <span>
+                      Stall Confirmed & Booked! ({inquiryData?.inquiry?.stallsBooked || 1} Stall{inquiryData?.inquiry?.stallsBooked === 1 ? "" : "s"} Allocated)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-indigo-700 leading-relaxed">
+                    Great news! The organizer has confirmed your booking and allocated stall space for your business.
+                  </p>
+                </div>
+              )}
+
+            {!isHostOrganizer &&
+              inquiryData?.hasInquiry &&
+              inquiryData?.status === "accepted" && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/90 p-3.5 text-xs text-emerald-900 shadow-2xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-extrabold text-emerald-800">
+                    <span>🎉</span>
+                    <span>
+                      Stall Inquired & Accepted! Organizer will contact you.
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-700 leading-relaxed">
+                    Great news! Your stall request has been accepted by{" "}
+                    <strong>{organizerName}</strong>. The organizer will reach
+                    out directly with booth allocation details.
+                  </p>
+                </div>
+              )}
+
+            {!isHostOrganizer &&
+              inquiryData?.hasInquiry &&
+              inquiryData?.status === "rejected" && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-xs text-slate-700 shadow-2xs">
+                  <p className="text-[11px] text-slate-600">
+                    <strong className="text-slate-800">Notice:</strong> Your
+                    previous inquiry was declined. You can submit a fresh
+                    inquiry with updated details or another stall category.
+                  </p>
+                </div>
+              )}
+
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={handleContactOrganizer}
-                className="flex-1 bg-[#F25C05] hover:bg-orange-600 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-md transition transform active:scale-95 text-center"
-              >
-                Contact Event Organizer
-              </button>
+              {isHostOrganizer ? (
+                <Link
+                  to={`/organizer/events/${displayId}`}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-md transition transform active:scale-95 text-center flex items-center justify-center gap-2"
+                >
+                  <span>👑 Manage Event in Organizer Portal</span>
+                </Link>
+              ) : inquiryData?.hasInquiry && inquiryData?.status === "booked" ? (
+                <button
+                  type="button"
+                  onClick={() => setShowContactModal(true)}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-md transition transform active:scale-95 text-center flex items-center justify-center gap-2"
+                  title="Stall booking is confirmed! Click to view details."
+                >
+                  <span>🎪</span>
+                  <span>
+                    Stall Confirmed & Booked ({inquiryData?.inquiry?.stallsBooked || 1} Stall{inquiryData?.inquiry?.stallsBooked === 1 ? "" : "s"})
+                  </span>
+                </button>
+              ) : inquiryData?.hasInquiry && inquiryData?.status === "new" ? (
+                <button
+                  type="button"
+                  onClick={() => setShowContactModal(true)}
+                  className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-md transition transform active:scale-95 text-center flex items-center justify-center gap-2"
+                  title="Inquiry is pending review. Click to view submitted details."
+                >
+                  <span>⏳</span>
+                  <span>
+                    Inquiry Already Submitted (Status: Pending Review)
+                  </span>
+                </button>
+              ) : inquiryData?.hasInquiry &&
+                inquiryData?.status === "accepted" ? (
+                <button
+                  type="button"
+                  onClick={() => setShowContactModal(true)}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-md transition transform active:scale-95 text-center flex items-center justify-center gap-2"
+                  title="Inquiry accepted! Click to view details."
+                >
+                  <span>✅</span>
+                  <span>
+                    Stall Inquired & Accepted! Organizer will contact you.
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleContactOrganizer}
+                  className="flex-1 bg-[#F25C05] hover:bg-orange-600 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-md transition transform active:scale-95 text-center"
+                >
+                  {inquiryData?.status === "rejected"
+                    ? "Submit Fresh Inquiry"
+                    : "Contact Event Organizer"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() =>
@@ -471,8 +655,11 @@ function EventDetailsPage() {
         isOpen={showContactModal}
         onClose={() => setShowContactModal(false)}
         event={event}
+        inquiryInfo={inquiryData}
+        onInquirySuccess={(updated) => {
+          setInquiryData(updated);
+        }}
       />
-
 
       {/* Role Warning Modal (for non-exhibitors like organizers) */}
       {showRoleWarningModal && (

@@ -11,6 +11,7 @@ import CreateEvent from "./pages/CreateEvent.jsx";
 import CityEventsPage from "./pages/CityEventsPage.jsx";
 import EventDetailsPage from "./pages/EventDetailsPage.jsx";
 import FavoritesPage from "./pages/FavoritesPage.jsx";
+import MyInquiriesPage from "./pages/MyInquiriesPage.jsx";
 import Login from "./pages/Login.jsx";
 import Registration from "./pages/Registration.jsx";
 import AdminEventSubmissions from "./pages/AdminEventSubmissions.jsx";
@@ -108,9 +109,10 @@ function App() {
               </Route>
             </Route>
 
-            {/* Protected Favorites Route */}
+            {/* Protected Routes (Favorites & Exhibitor Inquiries) */}
             <Route element={<ProtectedRoute />}>
               <Route path="/favorites" element={<FavoritesPage />} />
+              <Route path="/my-inquiries" element={<MyInquiriesPage />} />
             </Route>
 
           </Routes>

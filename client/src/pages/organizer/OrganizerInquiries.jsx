@@ -47,12 +47,20 @@ function OrganizerInquiries() {
     all: 0,
     new: 0,
     accepted: 0,
+    booked: 0,
     rejected: 0,
   });
 
   // Active Inquiry Modal
   const [selectedInquiry, setSelectedInquiry] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
+
+  // Mark as Booked Modal state
+  const [bookingModalInquiry, setBookingModalInquiry] = useState(null);
+  const [stallsToBook, setStallsToBook] = useState(1);
+  const [bookingNotes, setBookingNotes] = useState("");
+  const [bookingError, setBookingError] = useState("");
+  const [submittingBooking, setSubmittingBooking] = useState(false);
 
   // Debounce search input (400ms)
   useEffect(() => {
@@ -75,14 +83,17 @@ function OrganizerInquiries() {
       setLoading(true);
       setError("");
 
-      const { data } = await api.get("/organizer/inquiries", {
-        params: {
-          page,
-          limit: 10,
-          ...(searchTerm ? { search: searchTerm } : {}),
-          ...(statusFilter !== "all" ? { status: statusFilter } : {}),
-        },
-      });
+      const [{ data }] = await Promise.all([
+        api.get("/organizer/inquiries", {
+          params: {
+            page,
+            limit: 10,
+            ...(searchTerm ? { search: searchTerm } : {}),
+            ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+          },
+        }),
+        new Promise((resolve) => setTimeout(resolve, 400)),
+      ]);
 
       setInquiries(data.inquiries || []);
 
@@ -106,41 +117,60 @@ function OrganizerInquiries() {
     fetchInquiries();
   }, [page, searchTerm, statusFilter]);
 
-  // Handle status update (accept or reject)
-  const handleStatusChange = async (inquiryId, newStatus) => {
+  // Handle status update (accept, reject, or mark as booked)
+  const handleStatusChange = async (inquiryId, newStatus, extraData = {}) => {
     try {
       setUpdatingId(inquiryId);
       setActionSuccess("");
+      setError("");
 
       const { data } = await api.patch(
         `/organizer/inquiries/${inquiryId}/status`,
-        { status: newStatus },
+        { status: newStatus, ...extraData },
       );
 
       // Update in local state
       setInquiries((prev) =>
-        prev.map((item) =>
-          item._id === inquiryId ? { ...item, status: newStatus } : item,
-        ),
+        prev.map((item) => {
+          if (item._id === inquiryId) {
+            const updated = {
+              ...item,
+              ...data.inquiry,
+              status: newStatus,
+            };
+            if (data.event) {
+              updated.eventId = {
+                ...item.eventId,
+                availableStalls: data.event.availableStalls,
+                totalStalls: data.event.totalStalls,
+              };
+            }
+            return updated;
+          }
+          return item;
+        }),
       );
 
       // If open in modal, update modal state too
       if (selectedInquiry && selectedInquiry._id === inquiryId) {
-        setSelectedInquiry((prev) => ({ ...prev, status: newStatus }));
+        setSelectedInquiry((prev) => ({
+          ...prev,
+          ...data.inquiry,
+          status: newStatus,
+          ...(data.event
+            ? {
+                eventId: {
+                  ...prev.eventId,
+                  availableStalls: data.event.availableStalls,
+                  totalStalls: data.event.totalStalls,
+                },
+              }
+            : {}),
+        }));
       }
 
-      // Update aggregates
-      setAggregates((prev) => {
-        const copy = { ...prev };
-        const oldStatus = inquiries.find((i) => i._id === inquiryId)?.status || "new";
-        if (copy[oldStatus] !== undefined && copy[oldStatus] > 0) {
-          copy[oldStatus] -= 1;
-        }
-        if (copy[newStatus] !== undefined) {
-          copy[newStatus] += 1;
-        }
-        return copy;
-      });
+      // Refresh aggregates
+      fetchInquiries();
 
       setActionSuccess(
         data.message || `Inquiry marked as ${newStatus} successfully.`,
@@ -148,19 +178,74 @@ function OrganizerInquiries() {
 
       setTimeout(() => {
         setActionSuccess("");
-      }, 3500);
+      }, 4000);
+      return true;
     } catch (err) {
       console.error(`Failed to update inquiry to ${newStatus}:`, err);
       setError(
         err.response?.data?.message || `Failed to update inquiry status.`,
       );
+      return false;
     } finally {
       setUpdatingId(null);
     }
   };
 
-  const getStatusBadge = (status) => {
+  const openBookingModal = (inquiry) => {
+    setBookingModalInquiry(inquiry);
+    setStallsToBook(1);
+    setBookingNotes("");
+    setBookingError("");
+  };
+
+  const handleConfirmBooking = async (e) => {
+    e.preventDefault();
+    if (!bookingModalInquiry) return;
+
+    const available = bookingModalInquiry.eventId?.availableStalls ?? 999;
+    const numStalls = parseInt(stallsToBook, 10);
+
+    if (isNaN(numStalls) || numStalls < 1) {
+      setBookingError("Please enter a valid stall count (minimum 1).");
+      return;
+    }
+
+    if (numStalls > available) {
+      setBookingError(
+        `Cannot book ${numStalls} stalls. Only ${available} stalls are currently available for this event.`,
+      );
+      return;
+    }
+
+    setSubmittingBooking(true);
+    setBookingError("");
+
+    const success = await handleStatusChange(
+      bookingModalInquiry._id,
+      "booked",
+      {
+        stallsBooked: numStalls,
+        bookingNotes: bookingNotes.trim(),
+      },
+    );
+
+    setSubmittingBooking(false);
+    if (success) {
+      setBookingModalInquiry(null);
+    }
+  };
+
+  const getStatusBadge = (status, item = null) => {
     const s = (status || "").toLowerCase();
+    if (s === "booked") {
+      const count = item?.stallsBooked || selectedInquiry?.stallsBooked || 1;
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200/80 px-2.5 py-1 text-xs font-extrabold text-indigo-700">
+          <span>🎪</span>
+          <span>Booked ({count} {count === 1 ? "Stall" : "Stalls"})</span>
+        </span>
+      );
+    }
     if (s === "accepted") {
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
@@ -305,7 +390,7 @@ function OrganizerInquiries() {
       )}
 
       {/* Summary Cards Grid matching AdminEvents SummaryCard */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <SummaryCard
           icon={MessageSquare}
           title="Total Inquiries"
@@ -318,9 +403,9 @@ function OrganizerInquiries() {
 
         <SummaryCard
           icon={Clock3}
-          title="New Inquiries"
+          title="New / Pending"
           value={aggregates.new}
-          description="Awaiting your response"
+          description="Awaiting your review"
           loading={initialLoading}
           active={statusFilter === "new"}
           onClick={() => setStatusFilter("new")}
@@ -328,12 +413,22 @@ function OrganizerInquiries() {
 
         <SummaryCard
           icon={CheckCircle2}
-          title="Accepted"
+          title="Accepted Leads"
           value={aggregates.accepted}
-          description="Approved exhibitors"
+          description="Ready for phone follow-up"
           loading={initialLoading}
           active={statusFilter === "accepted"}
           onClick={() => setStatusFilter("accepted")}
+        />
+
+        <SummaryCard
+          icon={Check}
+          title="Booked Stalls"
+          value={aggregates.booked || 0}
+          description="Confirmed & allocated"
+          loading={initialLoading}
+          active={statusFilter === "booked"}
+          onClick={() => setStatusFilter("booked")}
         />
 
         <SummaryCard
@@ -382,7 +477,8 @@ function OrganizerInquiries() {
               >
                 <option value="all">All Inquiries</option>
                 <option value="new">New / Pending</option>
-                <option value="accepted">Accepted</option>
+                <option value="accepted">Accepted Leads</option>
+                <option value="booked">Booked / Converted</option>
                 <option value="rejected">Rejected</option>
               </select>
 
@@ -515,19 +611,32 @@ function OrganizerInquiries() {
 
                         {/* Status */}
                         <td className="px-5 py-4">
-                          {getStatusBadge(item.status)}
+                          {getStatusBadge(item.status, item)}
                         </td>
 
                         {/* Action */}
                         <td className="px-5 py-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedInquiry(item)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
-                          >
-                            <Eye size={15} />
-                            View
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            {item.status === "accepted" && (
+                              <button
+                                type="button"
+                                onClick={() => openBookingModal(item)}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 text-xs font-bold text-white transition shadow-2xs hover:shadow-xs active:scale-95"
+                                title="Confirm booking and allocate stalls"
+                              >
+                                <span>🎪</span>
+                                <span>Mark as Booked</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedInquiry(item)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
+                            >
+                              <Eye size={14} />
+                              View
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -560,7 +669,7 @@ function OrganizerInquiries() {
                         </div>
                       </div>
 
-                      {getStatusBadge(item.status)}
+                      {getStatusBadge(item.status, item)}
                     </div>
 
                     <div className="mt-3 space-y-1 text-xs text-slate-500">
@@ -578,13 +687,23 @@ function OrganizerInquiries() {
                       </p>
                     </div>
 
-                    <div className="mt-4 flex justify-end">
+                    <div className="mt-4 flex items-center justify-end gap-2">
+                      {item.status === "accepted" && (
+                        <button
+                          type="button"
+                          onClick={() => openBookingModal(item)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 text-xs font-bold text-white transition shadow-2xs"
+                        >
+                          <span>🎪</span>
+                          Mark as Booked
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setSelectedInquiry(item)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
                       >
-                        <Eye size={15} />
+                        <Eye size={14} />
                         View Details
                       </button>
                     </div>
@@ -701,50 +820,114 @@ function OrganizerInquiries() {
             {/* Modal Body */}
             <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
               {/* Status Header Bar */}
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/80 p-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5">
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                     Current Status
                   </p>
-                  <div className="mt-1">{getStatusBadge(selectedInquiry.status)}</div>
+                  <div className="mt-1">{getStatusBadge(selectedInquiry.status, selectedInquiry)}</div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleStatusChange(selectedInquiry._id, "accepted")}
-                    disabled={
-                      updatingId === selectedInquiry._id ||
-                      selectedInquiry.status === "accepted"
-                    }
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm disabled:opacity-50"
-                  >
-                    {updatingId === selectedInquiry._id ? (
-                      <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                      <Check size={13} />
-                    )}
-                    <span>Accept</span>
-                  </button>
+                <div className="flex items-center flex-wrap gap-2">
+                  {selectedInquiry.status === "accepted" && (
+                    <button
+                      type="button"
+                      onClick={() => openBookingModal(selectedInquiry)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm active:scale-95"
+                    >
+                      <span>🎪</span>
+                      <span>Mark as Booked</span>
+                    </button>
+                  )}
 
-                  <button
-                    type="button"
-                    onClick={() => handleStatusChange(selectedInquiry._id, "rejected")}
-                    disabled={
-                      updatingId === selectedInquiry._id ||
-                      selectedInquiry.status === "rejected"
-                    }
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm disabled:opacity-50"
-                  >
-                    {updatingId === selectedInquiry._id ? (
-                      <Loader2 size={13} className="animate-spin" />
-                    ) : (
+                  {selectedInquiry.status !== "accepted" && selectedInquiry.status !== "booked" && (
+                    <button
+                      type="button"
+                      onClick={() => handleStatusChange(selectedInquiry._id, "accepted")}
+                      disabled={updatingId === selectedInquiry._id}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm disabled:opacity-50"
+                    >
+                      {updatingId === selectedInquiry._id ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Check size={13} />
+                      )}
+                      <span>Accept Lead</span>
+                    </button>
+                  )}
+
+                  {selectedInquiry.status === "booked" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Cancel this booking? The ${selectedInquiry.stallsBooked || 1} allocated stall(s) will be restored back to the event availability.`,
+                          )
+                        ) {
+                          handleStatusChange(selectedInquiry._id, "rejected");
+                        }
+                      }}
+                      disabled={updatingId === selectedInquiry._id}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 px-3 py-2 text-xs font-bold transition shadow-2xs disabled:opacity-50"
+                    >
                       <X size={13} />
-                    )}
-                    <span>Reject</span>
-                  </button>
+                      <span>Cancel Booking</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleStatusChange(selectedInquiry._id, "rejected")}
+                      disabled={
+                        updatingId === selectedInquiry._id ||
+                        selectedInquiry.status === "rejected"
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm disabled:opacity-50"
+                    >
+                      {updatingId === selectedInquiry._id ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <X size={13} />
+                      )}
+                      <span>Reject</span>
+                    </button>
+                  )}
                 </div>
               </div>
+
+              {/* Informational Stage Cards */}
+              {selectedInquiry.status === "accepted" && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/90 p-3.5 text-xs text-emerald-900 shadow-2xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-800">
+                    <CheckCircle2 size={15} className="text-emerald-600" />
+                    <span>Stage 1 Completed: Lead Accepted</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    Stall count has not been deducted. Once you speak on the phone with the exhibitor and verify token payment, click <strong>"Mark as Booked"</strong> to allocate the stalls.
+                  </p>
+                </div>
+              )}
+
+              {selectedInquiry.status === "booked" && (
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50/90 p-3.5 text-xs text-indigo-900 shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold flex items-center gap-1.5 text-indigo-900">
+                      <span>🎪</span> Booking Confirmed ({selectedInquiry.stallsBooked || 1} Stall{selectedInquiry.stallsBooked === 1 ? "" : "s"} Allocated)
+                    </span>
+                    <span className="text-[11px] text-indigo-600 font-semibold">
+                      Remaining: {selectedInquiry.eventId?.availableStalls ?? 0} / {selectedInquiry.eventId?.totalStalls ?? 0}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-indigo-800 leading-relaxed">
+                    Confirmed on {formatDateTime(selectedInquiry.bookedAt || selectedInquiry.updatedAt)}.
+                    {selectedInquiry.bookingNotes && (
+                      <span className="block mt-0.5 font-medium text-indigo-900">
+                        Notes: "{selectedInquiry.bookingNotes}"
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
 
               {/* Exhibitor Information */}
               <div>
@@ -861,6 +1044,148 @@ function OrganizerInquiries() {
           </div>
         </div>
       )}
+
+      {/* Confirm Stall Booking (Stage 2) Modal */}
+      {bookingModalInquiry && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !submittingBooking) {
+              setBookingModalInquiry(null);
+            }
+          }}
+        >
+          <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4.5 bg-indigo-50/60">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 font-bold text-lg shadow-2xs">
+                  🎪
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+                    Confirm Stall Booking
+                  </h3>
+                  <p className="text-xs text-indigo-700 font-medium">
+                    Stage 2: Allocate & Deduct Stalls
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setBookingModalInquiry(null)}
+                disabled={submittingBooking}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleConfirmBooking} className="p-6 space-y-4">
+              {bookingError && (
+                <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+                  <AlertCircle size={16} className="shrink-0 text-rose-500" />
+                  <span>{bookingError}</span>
+                </div>
+              )}
+
+              {/* Event & Availability Summary */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-medium">Exhibitor:</span>
+                  <span className="font-bold text-slate-800">
+                    {bookingModalInquiry.firstName} {bookingModalInquiry.lastName || ""}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-medium">Event:</span>
+                  <span className="font-bold text-slate-800 truncate max-w-[200px]">
+                    {bookingModalInquiry.eventId?.title || "Event"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/80">
+                  <span className="text-slate-500 font-medium">Available Stalls:</span>
+                  <span className="inline-flex items-center gap-1 font-extrabold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md">
+                    <span>{bookingModalInquiry.eventId?.availableStalls ?? 0}</span>
+                    <span className="text-[10px] text-emerald-600 font-semibold">
+                      / {bookingModalInquiry.eventId?.totalStalls ?? 0} remaining
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Stall Count Input */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                  How many stalls were booked? <span className="text-rose-500">*</span>
+                </label>
+                <p className="text-[11px] text-slate-500 mb-1.5">
+                  This exact count will be deducted from the event's available stalls.
+                </p>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    max={bookingModalInquiry.eventId?.availableStalls ?? 999}
+                    value={stallsToBook}
+                    onChange={(e) => setStallsToBook(e.target.value)}
+                    required
+                    className="w-full rounded-xl border border-slate-300 bg-white py-2.5 px-3.5 text-base font-bold text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                  />
+                  <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                    Stalls
+                  </span>
+                </div>
+              </div>
+
+              {/* Booking Notes (Optional) */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Booking Notes / Reference <span className="text-slate-400 font-normal normal-case">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={bookingNotes}
+                  onChange={(e) => setBookingNotes(e.target.value)}
+                  placeholder="e.g. Token ₹5,000 received via UPI, allocated Stall #A12"
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white py-2 px-3 text-xs text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                />
+              </div>
+
+              {/* Actions Footer */}
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setBookingModalInquiry(null)}
+                  disabled={submittingBooking}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingBooking || (bookingModalInquiry.eventId?.availableStalls ?? 0) <= 0}
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 px-5 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submittingBooking ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>Allocating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>🎪</span>
+                      <span>Confirm Booking & Deduct</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -900,14 +1225,137 @@ function SummaryCard({ icon: Icon, title, value, description, loading, active, o
 
 function InquiriesTableSkeleton() {
   return (
-    <div className="space-y-4 p-8">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div
-          key={i}
-          className="h-16 w-full animate-pulse rounded-xl bg-slate-100"
-        />
-      ))}
-    </div>
+    <>
+      {/* Desktop Table Skeleton */}
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[900px]">
+          <thead className="bg-slate-50">
+            <tr className="border-b border-slate-200">
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-400">
+                Exhibitor
+              </th>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-400">
+                Event
+              </th>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-400">
+                Category
+              </th>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-400">
+                Date
+              </th>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-400">
+                Status
+              </th>
+              <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-400">
+                Action
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {[
+              { nameW: "w-32", phoneW: "w-44", eventW: "w-36", cityW: "w-20" },
+              { nameW: "w-40", phoneW: "w-48", eventW: "w-44", cityW: "w-24" },
+              { nameW: "w-28", phoneW: "w-36", eventW: "w-32", cityW: "w-16" },
+              { nameW: "w-36", phoneW: "w-44", eventW: "w-40", cityW: "w-24" },
+              { nameW: "w-32", phoneW: "w-36", eventW: "w-28", cityW: "w-20" },
+            ].map((row, index) => (
+              <tr key={index} className="animate-pulse">
+                {/* Exhibitor */}
+                <td className="px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50/80">
+                      <User size={17} className="text-orange-200" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className={`h-4 rounded-md bg-slate-200 ${row.nameW}`} />
+                      <div className={`h-3 rounded bg-slate-100 ${row.phoneW}`} />
+                    </div>
+                  </div>
+                </td>
+
+                {/* Event */}
+                <td className="px-5 py-4">
+                  <div className="space-y-1.5">
+                    <div className={`h-4 rounded-md bg-slate-200 ${row.eventW}`} />
+                    <div className="flex items-center gap-1">
+                      <MapPin size={12} className="text-slate-300" />
+                      <div className={`h-3 rounded bg-slate-100 ${row.cityW}`} />
+                    </div>
+                  </div>
+                </td>
+
+                {/* Category */}
+                <td className="px-5 py-4">
+                  <div className="h-6 w-24 rounded-lg bg-slate-100" />
+                </td>
+
+                {/* Date */}
+                <td className="px-5 py-4">
+                  <div className="h-3.5 w-32 rounded bg-slate-200" />
+                </td>
+
+                {/* Status */}
+                <td className="px-5 py-4">
+                  <div className="h-6 w-24 rounded-full border border-slate-100 bg-slate-100" />
+                </td>
+
+                {/* Action */}
+                <td className="px-5 py-4 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <div className="h-8 w-24 rounded-lg bg-slate-100" />
+                    <div className="h-8 w-16 rounded-lg border border-slate-200 bg-slate-50" />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile Cards Skeleton */}
+      <div className="divide-y divide-slate-100 md:hidden">
+        {[1, 2, 3].map((item) => (
+          <div key={item} className="p-4 animate-pulse space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50/80">
+                  <User size={17} className="text-orange-200" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="h-4 w-32 rounded-md bg-slate-200" />
+                  <div className="h-3 w-40 rounded bg-slate-100" />
+                </div>
+              </div>
+              <div className="h-6 w-20 rounded-full bg-slate-100" />
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-3 space-y-2">
+              <div className="h-4 w-44 rounded bg-slate-200" />
+              <div className="h-3 w-28 rounded bg-slate-100" />
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <div className="h-3 w-28 rounded bg-slate-100" />
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-24 rounded-lg bg-slate-100" />
+                <div className="h-8 w-14 rounded-lg border border-slate-200 bg-slate-50" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Pagination Skeleton */}
+      <div className="flex flex-col gap-4 border-t border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between animate-pulse">
+        <div className="h-4 w-32 rounded bg-slate-200" />
+        <div className="flex items-center gap-1">
+          <div className="h-9 w-20 rounded-lg border border-slate-200 bg-slate-50" />
+          <div className="hidden h-9 w-9 rounded-lg bg-orange-500/70 sm:block" />
+          <div className="hidden h-9 w-9 rounded-lg border border-slate-200 bg-slate-50 sm:block" />
+          <div className="h-9 w-16 rounded-lg border border-slate-200 bg-slate-50" />
+        </div>
+      </div>
+    </>
   );
 }
 

@@ -57,8 +57,23 @@ const inquirySchema = new mongoose.Schema(
         },
         status: {
             type: String,
-            enum: ["new", "accepted", "rejected", "contacted", "closed"],
+            enum: ["new", "accepted", "rejected", "contacted", "closed", "booked"],
             default: "new"
+        },
+        stallsBooked: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+        bookedAt: {
+            type: Date,
+            default: null,
+        },
+        bookingNotes: {
+            type: String,
+            trim: true,
+            default: "",
+            maxlength: 1000,
         },
 
         createdBy: {

@@ -99,6 +99,19 @@ export const listSubmissions = asyncHandler(async (req, res) => {
 
   const filter = status === "all" ? {} : { status };
 
+  const search = req.query.search?.trim();
+  if (search) {
+    const searchRegex = new RegExp(search, "i");
+    filter.$or = [
+      { title: searchRegex },
+      { city: searchRegex },
+      { venue: searchRegex },
+      { organizerName: searchRegex },
+      { organizerEmail: searchRegex },
+      { organizerPhone: searchRegex },
+    ];
+  }
+
   const [submissions, total] = await Promise.all([
     EventSubmission.find(filter)
       .sort({ createdAt: -1 })

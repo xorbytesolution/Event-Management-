@@ -155,6 +155,30 @@ function Navbar() {
               )}
             </Link>
 
+            {/* My Inquiries (Exhibitor Stall Inquiries) */}
+            {user && (
+              <Link
+                to="/my-inquiries"
+                className="relative flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-orange-50 hover:text-orange-600"
+              >
+                <svg
+                  className="h-4 w-4 text-slate-500 transition-colors"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
+                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                  <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
+                  <path d="M2 7h20" />
+                </svg>
+                <span>My Inquiries</span>
+              </Link>
+            )}
+
             {/* Cities */}
             <div className="relative">
               <button
@@ -326,6 +350,17 @@ function Navbar() {
                   </span>
                 )}
               </Link>
+
+              {user && (
+                <Link
+                  to="/my-inquiries"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 rounded-lg px-3 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-orange-50 hover:text-orange-600"
+                >
+                  <span>📋</span>
+                  <span>My Stall Inquiries</span>
+                </Link>
+              )}
 
               {user ? (
                 <>
